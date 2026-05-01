@@ -29,6 +29,7 @@ export function App() {
               href="https://x.com/joelbqz"
               target="_blank"
               rel="noopener noreferrer"
+              data-umami-event="Open updates"
             >
               Updates
             </a>
@@ -37,6 +38,7 @@ export function App() {
               href={__WRITER_REPO_URL__}
               target="_blank"
               rel="noopener noreferrer"
+              data-umami-event="Open GitHub"
             >
               GitHub
             </a>
