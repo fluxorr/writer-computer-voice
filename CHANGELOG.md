@@ -6,6 +6,8 @@
 - Style task list checkboxes with the accent color and use a Hugeicons checkmark for the checked state.
 - Fix tables getting horizontally squeezed when a single cell holds a long word; columns now lay out at their natural widths and the table scrolls instead.
 - Fix the caret jumping to the wrong position when switching tabs.
+- Fix the editor not auto-focusing after creating a new file from the command palette. The dialog now closes before the file is opened so its focus trap and focus restoration finish before the editor mounts and calls `view.focus()`.
+- Land the caret after the `# ` heading prompt when a new file opens so the user can type the title immediately.
 
 ## 2026-05-01
 
