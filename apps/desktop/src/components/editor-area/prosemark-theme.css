@@ -109,20 +109,20 @@
    stray 6px / 2px just shifts text relative to cm-content's content area
    (and shows up as a small offset in `drawSelection`'s computed
    leftSide/rightSide). */
-.cm-editor .cm-line, .ͼp .cm-horizontal-rule-container {
+.cm-editor .cm-line,
+.ͼp .cm-horizontal-rule-container {
   padding-left: 0;
   padding-right: 0;
 }
 
 .cm-line.cm-blockquote-line::before {
-    inset-inline-start: 0;
+  inset-inline-start: 0;
 }
 .cm-editor .cm-fenced-code-line {
-    margin-left: 0;
-    padding-left: 12px;
-    padding-right:12px;
+  margin-left: 0;
+  padding-left: 12px;
+  padding-right: 12px;
 }
-
 
 /* Reduce height of blank lines used as block separators */
 .cm-editor .cm-line:has(> br:only-child) {
