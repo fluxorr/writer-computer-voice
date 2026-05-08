@@ -1,6 +1,8 @@
 # Writer
 
-Writer is a local-first desktop markdown editor for folders of plain-text notes, docs, and personal wikis.
+Fast and lightweight app for your workspace's markdown files
+
+![Writer](./assets/screenshot.png)
 
 It is built with Tauri v2, React, Zustand, CodeMirror, and Rust. The app keeps documents on disk, respects workspace `.gitignore` rules, supports multiple windows, renders extended markdown such as tables and Mermaid diagrams, and ships with a signed macOS release flow.
 
