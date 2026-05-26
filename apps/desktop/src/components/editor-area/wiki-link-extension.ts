@@ -205,12 +205,18 @@ function wikiLinkClickHandler(getFilePath: () => string, isDisposed: () => boole
       mousedown(event, view) {
         const target = event.target;
         if (!(target instanceof Element)) return false;
-        if (!target.closest(".cm-wiki-link")) return false;
+        const wikiLink = target.closest(".cm-wiki-link");
+        if (!wikiLink) return false;
 
-        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-        if (pos === null) return false;
-
-        const rawTarget = extractWikiTarget(view.state.doc, pos);
+        let rawTarget =
+          wikiLink instanceof HTMLElement && wikiLink.dataset.wikiTarget
+            ? wikiLink.dataset.wikiTarget
+            : null;
+        if (!rawTarget) {
+          const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+          if (pos === null) return false;
+          rawTarget = extractWikiTarget(view.state.doc, pos);
+        }
         if (!rawTarget) return false;
 
         event.preventDefault();

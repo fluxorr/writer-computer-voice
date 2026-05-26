@@ -6,6 +6,9 @@
 
 ## Done
 
+- Table cell link regressions: [`SPECs/table-cell-link-regressions-spec.md`](SPECs/table-cell-link-regressions-spec.md) — keep rendered table-cell links clickable without unfolding the table, and render Obsidian wiki links with table-escaped aliases correctly.
+- Table cell markdown preview: [`SPECs/table-cell-markdown-preview-spec.md`](SPECs/table-cell-markdown-preview-spec.md) — render inline markdown inside folded table preview cells instead of showing the raw markdown delimiters.
+- Table unfold codeblock display: [`SPECs/table-unfold-codeblock-spec.md`](SPECs/table-unfold-codeblock-spec.md) — render touched table markdown as codeblock-styled source lines in the main editor instead of plain prose.
 - Markdown heading top padding: [`SPECs/heading-top-padding-spec.md`](SPECs/heading-top-padding-spec.md) — inject a shared editor heading class and use it to add 1rem top padding to Markdown headings.
 - Sidebar hover and active foreground polish — make sidebar icons and labels use full foreground color on hover, selection, and active states.
 - Code block editor font size — make fenced Markdown code blocks and inline code follow the editor font-size setting.

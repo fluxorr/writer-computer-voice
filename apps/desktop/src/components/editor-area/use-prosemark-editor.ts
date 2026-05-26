@@ -370,14 +370,20 @@ function linkNavigationExtension(getFilePath: () => string, isDisposed: () => bo
           return true;
         }
 
-        const isRenderedLink = target.closest(".cm-rendered-link") !== null;
+        const renderedLink = target.closest(".cm-rendered-link");
+        const isRenderedLink = renderedLink !== null;
         const isRawUrl = target.closest(".cm-url") !== null;
         if (!isRenderedLink && !isRawUrl) return false;
 
-        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-        if (pos === null) return false;
-
-        const href = isRenderedLink ? getLinkHref(view, pos) : getRawUrl(view, pos);
+        let href =
+          renderedLink instanceof HTMLElement && renderedLink.dataset.href
+            ? renderedLink.dataset.href
+            : undefined;
+        if (!href) {
+          const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+          if (pos === null) return false;
+          href = isRenderedLink ? getLinkHref(view, pos) : getRawUrl(view, pos);
+        }
         if (!href) return false;
 
         event.preventDefault();

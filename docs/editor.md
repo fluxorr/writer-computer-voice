@@ -45,10 +45,11 @@ Reference: `EditorView.scrollHandler.of((view, range) => …)` in `apps/desktop/
 
 ## Block widgets: pick the decoration shape
 
-Two shapes for widgets that own a fenced region:
+Common shapes for widgets that own a block region:
 
-- **Replace-only.** Always `Decoration.replace`. Use when the widget doesn't need to expose source for editing — interaction lives inside the widget itself. Canonical example: `table-decorations.ts` (cell click edits cells; the markdown source is never shown alongside).
+- **Replace-only.** Always `Decoration.replace`. Use when the widget doesn't need to expose source for editing and interaction lives inside the widget itself.
 - **Conditional replace ↔ widget.** `Decoration.replace` over `[node.from, node.to]` when the selection doesn't overlap the fence; `Decoration.widget(...).range(node.to)` (block, anchored at the end) when it does. The source becomes editable above the canvas. Canonical example: `mermaid-decorations.ts`. Driven by `selectionTouchesRange`, the third arg passed to `foldableSyntaxFacet`'s `buildDecorations`.
+- **Conditional replace ↔ source-line styling.** `Decoration.replace` when the selection is outside the block; line decorations when selection touches the block and the source should stay editable in the main editor. Canonical example: `table-decorations.ts`, which renders a folded table preview with safe inline markdown inside cells, then unfolds a touched table into codeblock-styled markdown source lines rather than a nested editor.
 
 Don't invent a parallel "edit mode" flag that isn't wired through `selectionTouchesRange`. The fold extension already manages that state — duplicating it produces drift between the two sources of truth.
 
