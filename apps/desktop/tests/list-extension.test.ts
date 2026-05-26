@@ -60,6 +60,21 @@ function prefixMarks(
   return marks;
 }
 
+function spacerMarks(state: EditorState): Array<{ from: number; to: number; style: string }> {
+  const decos = state.field(__test.listDecorationsField);
+  const marks: Array<{ from: number; to: number; style: string }> = [];
+  decos.all.between(0, state.doc.length, (from, to, deco) => {
+    const spec = deco.spec as { class?: unknown; attributes?: { style?: unknown } };
+    if (spec.class !== "cm-list-indent-spacer") return;
+    marks.push({
+      from,
+      to,
+      style: typeof spec.attributes?.style === "string" ? spec.attributes.style : "",
+    });
+  });
+  return marks;
+}
+
 // ---------------------------------------------------------------------------
 // isOnListLine
 // ---------------------------------------------------------------------------
@@ -275,6 +290,20 @@ describe("listIndent (Tab)", () => {
     const s = makeState("hello", 5);
     expect(run(listIndent, s).ran).toBe(false);
   });
+
+  test("indents every selected list line", () => {
+    const s = makeState("- a\n- b\n- c", 4, 11);
+    const { state, ran } = run(listIndent, s);
+    expect(ran).toBe(true);
+    expect(state.doc.toString()).toBe("- a\n  - b\n  - c");
+  });
+
+  test("leaves non-list lines unchanged in a multi-line selection", () => {
+    const s = makeState("- a\npara\n- b", 0, 12);
+    const { state, ran } = run(listIndent, s);
+    expect(ran).toBe(true);
+    expect(state.doc.toString()).toBe("- a\npara\n  - b");
+  });
 });
 
 describe("listOutdent (Shift-Tab)", () => {
@@ -299,6 +328,13 @@ describe("listOutdent (Shift-Tab)", () => {
     const { state, ran } = run(listOutdent, s);
     expect(ran).toBe(true);
     expect(state.doc.toString()).toBe("- a");
+  });
+
+  test("outdents every selected nested list line one level", () => {
+    const s = makeState("- a\n  - b\n  - c", 4, 15);
+    const { state, ran } = run(listOutdent, s);
+    expect(ran).toBe(true);
+    expect(state.doc.toString()).toBe("- a\n- b\n- c");
   });
 });
 
@@ -381,6 +417,15 @@ describe("listDecorationsField", () => {
     expect(total).toBe(6);
   });
 
+  test("renders each two-space nesting step as one spacer mark", () => {
+    const s = makeState("- a\n  - b\n    - c");
+    expect(spacerMarks(s)).toEqual([
+      { from: 4, to: 6, style: "width: 3ch" },
+      { from: 10, to: 12, style: "width: 3ch" },
+      { from: 12, to: 14, style: "width: 3ch" },
+    ]);
+  });
+
   test("renders the bullet prefix as a source-backed mark", () => {
     const s = makeState("- ", 2);
     expect(prefixMarks(s)).toEqual([
@@ -431,10 +476,10 @@ describe("listDecorationsField", () => {
     expect(prefixMarks(s).filter((mark) => mark.className.includes("cm-list-prefix-task"))).toEqual(
       [
         {
-          from: 4,
+          from: 6,
           to: 12,
           className: "cm-list-prefix cm-list-prefix-task cm-list-prefix-task-checked",
-          style: "width: 6ch; --cm-list-marker-offset: 3ch; --cm-list-marker-width: 3ch",
+          style: "width: 3ch; --cm-list-marker-offset: 0ch; --cm-list-marker-width: 3ch",
         },
       ],
     );

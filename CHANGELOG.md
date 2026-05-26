@@ -2,6 +2,7 @@
 
 ## 2026-05-26
 
+- Make nested bullet/TODO indentation interact more predictably: each two-space nesting level now renders as one measurable spacer unit before the marker, Backspace at a spacer edge removes one nesting level, and Tab/Shift-Tab now indents or outdents every selected bullet/task line in multi-line selections while leaving non-list lines unchanged.
 - Stabilize unordered-list and TODO-list drag selection by replacing bullet/task point widgets plus zero-width hidden prefixes with measurable source-backed prefix spans. The real markdown prefix now owns the hit-test geometry while CSS draws the bullet or checkbox on that span, preserving nested alignment, empty-item carets, checkbox toggles, and list keyboard behavior without widget boundary snaps.
 - Fix rendered table-cell links so clicking markdown links and Obsidian wiki links navigates instead of unfolding the table source. Table-cell wiki links now render aliases correctly, including table-escaped separators like `[[Format your notes\|Formatting]]`.
 - Render inline markdown inside folded table preview cells. Bold, italic, inline code, links, strikethrough, escaped pipes, and common HTML entities now display as rendered inline content in table headers and body cells, while inline HTML stays text-only and the unfolded source-editing path is unchanged.

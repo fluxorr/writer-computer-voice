@@ -1,5 +1,6 @@
 import { syntaxTree } from "@codemirror/language";
 import {
+  type ChangeSpec,
   type EditorState,
   type Extension,
   Prec,
@@ -20,23 +21,27 @@ const LIST_UNIT_CH = 3;
 // parent. List nesting in practice is shallow; this avoids O(n) on giant
 // docs with no blank-line breaks between items.
 const PREV_LIST_LOOKBACK = 256;
+const LIST_INDENT_SPACES = 2;
 
-// Measurable source-backed rendering of bullet/task prefixes. The full source
-// prefix (leading whitespace + `- ` or `- [ ] `) remains in normal inline flow
-// as a fixed-width mark. CSS hides the source text and draws the visible marker
-// on the same span, so hit-testing and drawn selection geometry see stable text
-// boxes rather than collapsed prefix spans plus widget tiles.
-const listPrefixDecoration = (depth: number, kind: "bullet" | "task", checked = false) => {
-  const prefixCh = (depth + 1) * LIST_UNIT_CH;
-  const markerOffsetCh = depth * LIST_UNIT_CH;
+// Measurable source-backed rendering of bullet/task prefixes. Leading nesting
+// spaces render as fixed-width spacer marks, then the marker source (`- ` or
+// `- [ ] `) renders as a fixed-width prefix mark. CSS hides the source text and
+// draws the visible marker on the same span, so hit-testing and drawn selection
+// geometry see stable text boxes rather than collapsed spans plus widget tiles.
+const listIndentSpacerDecoration = Decoration.mark({
+  class: "cm-list-indent-spacer",
+  attributes: { style: `width: ${LIST_UNIT_CH.toString()}ch` },
+});
+
+const listPrefixDecoration = (kind: "bullet" | "task", checked = false) => {
   const classes = ["cm-list-prefix", `cm-list-prefix-${kind}`];
   if (checked) classes.push("cm-list-prefix-task-checked");
   return Decoration.mark({
     class: classes.join(" "),
     attributes: {
       style: [
-        `width: ${prefixCh.toString()}ch`,
-        `--cm-list-marker-offset: ${markerOffsetCh.toString()}ch`,
+        `width: ${LIST_UNIT_CH.toString()}ch`,
+        "--cm-list-marker-offset: 0ch",
         `--cm-list-marker-width: ${LIST_UNIT_CH.toString()}ch`,
       ].join("; "),
     },
@@ -135,24 +140,18 @@ function buildListDecorations(state: EditorState): ListDecorations {
       }
       if (depth < 0) depth = 0;
 
-      // Indent-step atomic markers — one zero-DOM mark per nesting level,
+      // Indent-step spacer marks — one fixed-width mark per nesting level,
       // tracking the source char ranges so arrow keys and Backspace treat
-      // each indent step as a unit (Backspace removes the whole step's
-      // chars via `listBackspace`'s `decos.atomic` lookup). Previously
-      // rendered as `IndentSpacerWidget` Decoration.replace tiles, but
-      // those caused `posAtCoords` to snap body-text hit-tests to their
-      // widgetTo boundary — switched to mark-only tracking + line padding
-      // for the visual indent.
+      // each two-space step as a unit. The source spaces stay measurable,
+      // but visually they collapse to one predictable spacer column.
       const line = state.doc.lineAt(node.from);
       const leadingFrom = line.from;
       const leadingTo = node.from;
       const leadingLen = leadingTo - leadingFrom;
-      if (depth >= 1 && leadingLen >= depth) {
-        const step = Math.floor(leadingLen / depth);
-        for (let i = 0; i < depth; i++) {
-          const subFrom = leadingFrom + i * step;
-          const subTo = i === depth - 1 ? leadingTo : leadingFrom + (i + 1) * step;
-          if (subTo <= subFrom) break;
+      if (leadingLen > 0) {
+        for (let subFrom = leadingFrom; subFrom < leadingTo; subFrom += LIST_INDENT_SPACES) {
+          const subTo = Math.min(subFrom + LIST_INDENT_SPACES, leadingTo);
+          allRanges.push(listIndentSpacerDecoration.range(subFrom, subTo));
           atomicRanges.push(listPrefixMarkerDecoration.range(subFrom, subTo));
         }
       }
@@ -180,7 +179,7 @@ function buildListDecorations(state: EditorState): ListDecorations {
       if (prefixEnd < 0) {
         prefixEnd = node.to + 1;
       }
-      allRanges.push(listPrefixDecoration(depth, prefixKind, checked).range(line.from, prefixEnd));
+      allRanges.push(listPrefixDecoration(prefixKind, checked).range(node.from, prefixEnd));
       // Marker / atomic tracking — `listBackspace` checks `decos.marker`
       // for the right-edge-of-prefix case (delete the whole prefix back to
       // line.from), and `decos.atomic` already carries indent-step ranges
@@ -253,6 +252,10 @@ const findPrevListItemIndent = (
 const currentLineIndentLen = (lineText: string): number =>
   /^[ \t]*/.exec(lineText)?.[0].length ?? 0;
 
+// Captures the indent + marker + optional task-marker prefix of any bullet/task
+// line. Used by Enter continuation and list indentation commands.
+const LIST_LINE_PREFIX_RE = /^([ \t]*)([-+*]) (\[.\] )?/;
+
 // Walk the syntax tree across the entire line range looking for a list
 // marker. The previous `resolveInner(pos)` ancestor-walk approach worked
 // for bullets but missed empty tasks: with the cursor at the end of
@@ -276,6 +279,70 @@ const isOnListLine = (state: EditorState, pos: number): boolean => {
   return found;
 };
 
+const selectedLineNumbers = (state: EditorState): number[] => {
+  const numbers = new Set<number>();
+  for (const range of state.selection.ranges) {
+    const fromLine = state.doc.lineAt(range.from);
+    const endPos = range.empty ? range.to : Math.max(range.from, range.to - 1);
+    const toLine = state.doc.lineAt(endPos);
+    for (let number = fromLine.number; number <= toLine.number; number++) {
+      numbers.add(number);
+    }
+  }
+  return [...numbers].sort((a, b) => a - b);
+};
+
+const listIndentSelection: StateCommand = ({ state, dispatch }) => {
+  const changes: ChangeSpec[] = [];
+  let sawListLine = false;
+
+  for (const lineNumber of selectedLineNumbers(state)) {
+    const line = state.doc.line(lineNumber);
+    const match = LIST_LINE_PREFIX_RE.exec(line.text);
+    if (!match) continue;
+    sawListLine = true;
+
+    const currentIndent = match[1]?.length ?? 0;
+    const prevIndent = findPrevListItemIndent(state, line.number, (i) => i <= currentIndent);
+    if (prevIndent < 0) continue;
+
+    const targetIndent = prevIndent + LIST_INDENT_SPACES;
+    if (currentIndent >= targetIndent) continue;
+
+    changes.push({ from: line.from, insert: " ".repeat(targetIndent - currentIndent) });
+  }
+
+  if (!sawListLine) return false;
+  if (changes.length > 0) {
+    dispatch(state.update({ changes, userEvent: "input.indent" }));
+  }
+  return true;
+};
+
+const listOutdentSelection: StateCommand = ({ state, dispatch }) => {
+  const changes: ChangeSpec[] = [];
+  let sawListLine = false;
+
+  for (const lineNumber of selectedLineNumbers(state)) {
+    const line = state.doc.line(lineNumber);
+    const match = LIST_LINE_PREFIX_RE.exec(line.text);
+    if (!match) continue;
+    sawListLine = true;
+
+    const currentIndent = match[1]?.length ?? 0;
+    if (currentIndent === 0) continue;
+
+    const removeLen = Math.min(LIST_INDENT_SPACES, currentIndent);
+    changes.push({ from: line.from, to: line.from + removeLen });
+  }
+
+  if (!sawListLine) return false;
+  if (changes.length > 0) {
+    dispatch(state.update({ changes, userEvent: "delete.outdent" }));
+  }
+  return true;
+};
+
 // `StateCommand` signature instead of `(view) => boolean` keeps the
 // handlers testable: tests can call them with `{state, dispatch}` directly
 // (no `EditorView`/DOM needed). EditorView satisfies the same shape, so
@@ -292,11 +359,8 @@ const isOnListLine = (state: EditorState, pos: number): boolean => {
 // through and insert a literal `\t` — that would break the list parse.
 const listIndent: StateCommand = ({ state, dispatch }) => {
   if (state.readOnly) return false;
-  // Multi-cursor / non-empty selection: consume so the fall-through
-  // `indentWithTab` doesn't insert `\t` characters that break list parsing
-  // on any of the selected lines. Multi-line list indent is a TODO.
   if (state.selection.ranges.length !== 1 || !state.selection.main.empty) {
-    return isOnListLineAtAnyRange(state);
+    return listIndentSelection({ state, dispatch });
   }
   const sel = state.selection.main;
   if (!isOnListLine(state, sel.head)) return false;
@@ -306,7 +370,7 @@ const listIndent: StateCommand = ({ state, dispatch }) => {
 
   const prevIndent = findPrevListItemIndent(state, line.number, (i) => i <= currentIndent);
   if (prevIndent < 0) return true;
-  const targetIndent = prevIndent + 2;
+  const targetIndent = prevIndent + LIST_INDENT_SPACES;
   if (currentIndent >= targetIndent) return true;
 
   const insertLen = targetIndent - currentIndent;
@@ -321,12 +385,11 @@ const listIndent: StateCommand = ({ state, dispatch }) => {
 };
 
 // Shift-Tab on a list line: align to the nearest previous list item with
-// a strictly shallower indent — i.e. step up one nesting level. Same
-// multi-cursor-consume policy as `listIndent`.
+// a strictly shallower indent — i.e. step up one nesting level.
 const listOutdent: StateCommand = ({ state, dispatch }) => {
   if (state.readOnly) return false;
   if (state.selection.ranges.length !== 1 || !state.selection.main.empty) {
-    return isOnListLineAtAnyRange(state);
+    return listOutdentSelection({ state, dispatch });
   }
   const sel = state.selection.main;
   if (!isOnListLine(state, sel.head)) return false;
@@ -357,10 +420,6 @@ const listOutdent: StateCommand = ({ state, dispatch }) => {
 // the required trailing space — i.e. an empty list item the user typed
 // `Enter` on. Captures optional leading whitespace for nested empties.
 const EMPTY_LIST_LINE_RE = /^[ \t]*[-+*] (\[.\] )?$/;
-
-// Captures the indent + marker + optional task-marker prefix of any list
-// line. Used to mirror the prefix onto the next line on `Enter`.
-const LIST_LINE_PREFIX_RE = /^([ \t]*)([-+*]) (\[.\] )?/;
 
 const listEnter: StateCommand = ({ state, dispatch }) => {
   if (state.readOnly) return false;
@@ -465,12 +524,6 @@ const listBackspace: StateCommand = ({ state, dispatch }) => {
   );
   return true;
 };
-
-// Returns true if any selection range's `head` sits on a list line. Used
-// by the Tab/Shift-Tab multi-cursor short-circuit so we still consume the
-// keystroke (suppressing `indentWithTab`) even when we won't act on it.
-const isOnListLineAtAnyRange = (state: EditorState): boolean =>
-  state.selection.ranges.some((r) => isOnListLine(state, r.head));
 
 // Click-toggle for the checkbox prefix. Keep this on `click`, not `mousedown`:
 // mousedown is CodeMirror's drag-selection start gesture, and consuming it makes

@@ -6,6 +6,7 @@
 
 ## Done
 
+- List indent interactions: [`SPECs/list-indent-interactions-spec.md`](SPECs/list-indent-interactions-spec.md) — render each nesting step as one source-backed spacer unit and make Tab/Shift-Tab indent or outdent multi-line list selections.
 - List selection geometry revamp: [`SPECs/list-selection-geometry-revamp-spec.md`](SPECs/list-selection-geometry-revamp-spec.md) — replace bullet/task point widgets plus zero-width hidden prefixes with measurable source-backed prefix marks so horizontal drag selection has stable hit-test geometry.
 - Table cell link regressions: [`SPECs/table-cell-link-regressions-spec.md`](SPECs/table-cell-link-regressions-spec.md) — keep rendered table-cell links clickable without unfolding the table, and render Obsidian wiki links with table-escaped aliases correctly.
 - Table cell markdown preview: [`SPECs/table-cell-markdown-preview-spec.md`](SPECs/table-cell-markdown-preview-spec.md) — render inline markdown inside folded table preview cells instead of showing the raw markdown delimiters.

@@ -100,6 +100,14 @@ const baseThemeSpec = {
   // Width and marker offset are set inline by `listExtension` from its
   // `LIST_UNIT_CH` constant (single source of truth), so the rules here only
   // carry layout-shape and theming concerns.
+  ".cm-list-indent-spacer": {
+    display: "inline-block",
+    boxSizing: "border-box",
+    whiteSpace: "pre",
+    textAlign: "right",
+    color: "transparent",
+    textIndent: "0",
+  },
   ".cm-list-prefix": {
     display: "inline-block",
     position: "relative",
