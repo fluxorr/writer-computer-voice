@@ -27,16 +27,15 @@
 ## Results
 
 - Refreshed `apps/desktop/src-tauri/Cargo.lock` with `cargo update`.
-- Attempted the compatible `vite-plus` lock refresh from `0.1.15` to `0.1.22`,
-  but reverted `pnpm-lock.yaml` after `vp check` failed with broad existing-test
-  NodeNext import-extension/typechecking errors.
-- Reinstalled the workspace from the restored JS lockfile with
-  `vp install --frozen-lockfile --ignore-scripts`.
+- Refreshed `pnpm-lock.yaml` with the compatible `vite-plus` lock update from
+  `0.1.15` to `0.1.22`.
+- Changed the root `tsconfig.json` from NodeNext module resolution to bundler
+  resolution so root-level type-aware checks treat Vitest/test imports the same
+  way the app package configs do.
 - Validation:
-  - `vp check` passed with existing e2e warnings.
-  - `vp test` passed: 27 files, 436 tests.
+  - `vp check` passed with existing e2e warnings after the JavaScript update.
+  - `vp test` passed after the JavaScript update: 27 files, 436 tests.
   - `cargo test` passed: 103 tests.
   - `cargo clippy` completed with warnings.
   - `cargo fmt --check` passed.
-- `vp outdated --compatible --format json -r -w` still reports deferred
-  `vite-plus` `0.1.15` -> `0.1.22`.
+- `vp outdated --compatible --format json -r -w` returns `{}`.

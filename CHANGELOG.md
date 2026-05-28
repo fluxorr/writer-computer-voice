@@ -2,7 +2,7 @@
 
 ## 2026-05-27
 
-- Refresh the compatible Rust dependency lockfile for the Tauri app. The available `vite-plus` JavaScript toolchain lock update is deferred because it introduces broad NodeNext import-extension/typechecking failures in existing tests under `vp check`.
+- Refresh compatible Rust and JavaScript dependency lockfiles. The JavaScript update moves the local Vite+ toolchain to the latest compatible lockfile version and aligns the root TypeScript config with the app-level bundler resolution used by Vite/Vitest checks.
 
 ## 2026-05-26
 
