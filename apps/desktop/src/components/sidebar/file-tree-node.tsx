@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, type MouseEvent } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowDown01Icon, ArrowRight01Icon, File02Icon } from "@hugeicons/core-free-icons";
+import { ArrowRight01Icon, File02Icon } from "@hugeicons/core-free-icons";
 import { useIsActive, useResolvedDocumentTitle } from "@/hooks/use-tabs";
 import { getFileStem } from "@/lib/paths";
 import type { DirEntry } from "@/types/fs";
@@ -166,32 +166,33 @@ export const FileTreeNode = memo(function FileTreeNode({
       onMouseDown={(e) => e.preventDefault()}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
-      className={`group ${entry.is_dir ? "group/folder " : ""}flex h-[32px] w-full items-center gap-1.5 overflow-hidden rounded-lg pr-2 text-left text-[13px] leading-[1.15] text-[var(--fg-base)] transition-colors hover:transition-none ${bgClassName}`}
+      className={`group ${entry.is_dir ? "group/folder " : ""}flex h-[32px] w-full items-center gap-1.5 overflow-hidden rounded-lg pr-2 text-left text-[13px] leading-[1.15] text-[var(--fg-base)] ${bgClassName}`}
       style={{ paddingLeft: depth === 0 ? 10 : depth * 12 + 6 }}
     >
       <span className="relative flex w-5 shrink-0 items-center justify-center">
         {entry.is_dir ? (
           <>
-            <span className="flex items-center justify-center opacity-60 transition-opacity group-hover:opacity-100 group-hover/folder:opacity-0 group-hover:transition-none">
+            <span className="flex items-center justify-center opacity-60 group-hover:opacity-100 group-hover/folder:opacity-0">
               <FolderIcon isExpanded={isExpanded} />
             </span>
-            <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/folder:opacity-100 group-hover:transition-none">
+            <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/folder:opacity-100">
               <HugeiconsIcon
-                icon={isExpanded ? ArrowDown01Icon : ArrowRight01Icon}
+                icon={ArrowRight01Icon}
                 size={16}
                 color="currentColor"
                 strokeWidth={2}
+                className={`transition-transform duration-200 ease-out ${isExpanded ? "rotate-90" : ""}`}
               />
             </span>
           </>
         ) : (
-          <span className="opacity-60 transition-opacity group-hover:opacity-100 group-hover:transition-none">
+          <span className="opacity-60 group-hover:opacity-100">
             <FileIcon />
           </span>
         )}
       </span>
       <span
-        className={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap transition-opacity ${isHighlighted ? "opacity-100" : "opacity-60 group-hover:opacity-100 group-hover:transition-none"}`}
+        className={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${isHighlighted ? "opacity-100" : "opacity-60 group-hover:opacity-100"}`}
       >
         {displayName}
       </span>

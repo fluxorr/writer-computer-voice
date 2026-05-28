@@ -2,6 +2,7 @@
 
 ## 2026-05-28
 
+- Animate the sidebar folder caret so it rotates smoothly between collapsed (pointing right) and expanded (pointing down) instead of swapping icons instantly. The caret rotation is now the only animated transition on sidebar rows — the hover background highlight and the icon/label opacity changes apply instantly.
 - Update the app icon across all platforms (macOS `.icns`, Windows `.ico`, Linux/Store PNGs, and Android/iOS launcher assets) and sync the marketing website favicon to match.
 - Show an arrow caret on folder hover in the sidebar, replacing the folder icon, so expand/collapse intent is clearer. Icons and labels now fade in/out with opacity rather than color transitions for a cleaner visual hierarchy.
 
