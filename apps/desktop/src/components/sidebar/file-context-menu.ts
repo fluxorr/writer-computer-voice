@@ -12,6 +12,7 @@ export type FileMenuActionId =
   | "copy-relative-path"
   | "copy-absolute-path"
   | "reveal"
+  | "rename"
   | "delete";
 
 export interface FileContextMenuHandlers {
@@ -21,6 +22,7 @@ export interface FileContextMenuHandlers {
   onCopyRelativePath: () => void;
   onCopyAbsolutePath: () => void;
   onReveal: () => void;
+  onRename: () => void;
   onDelete: () => void;
 }
 
@@ -66,6 +68,7 @@ export function buildFileMenuItemsSpec(
       action: handlers.onReveal,
     },
     { kind: "separator" },
+    { kind: "item", id: "rename", text: "Rename...", action: handlers.onRename },
     { kind: "item", id: "delete", text: "Delete", action: handlers.onDelete },
   ];
 }

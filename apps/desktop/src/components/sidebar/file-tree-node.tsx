@@ -56,6 +56,10 @@ interface FileTreeNodeProps {
   onContextMenu?: (event: MouseEvent<HTMLElement>, entry: DirEntry) => void;
   onRenameSubmit?: (entry: DirEntry, nextStem: string) => void;
   onRenameCancel?: () => void;
+  /** Tree-wide label mode from `appearance.sidebar-file-label`. `"filename"`
+   *  shows the file stem; anything else (incl. `undefined` pre-hydration)
+   *  shows the document title, falling back to the stem. */
+  fileLabelMode?: string;
 }
 
 export const FileTreeNode = memo(function FileTreeNode({
@@ -70,12 +74,15 @@ export const FileTreeNode = memo(function FileTreeNode({
   onContextMenu,
   onRenameSubmit,
   onRenameCancel,
+  fileLabelMode,
 }: FileTreeNodeProps) {
   const isActive = useIsActive(entry.path);
   const editorTitle = useResolvedDocumentTitle(entry.is_dir ? null : entry.path);
   const displayName = entry.is_dir
     ? entry.name
-    : editorTitle || entry.title || getFileStem(entry.name);
+    : fileLabelMode === "filename"
+      ? getFileStem(entry.name)
+      : editorTitle || entry.title || getFileStem(entry.name);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus and select the stem when entering rename mode.

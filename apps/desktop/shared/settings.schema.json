@@ -54,6 +54,15 @@
       "default": true
     },
     {
+      "key": "appearance.sidebar-file-label",
+      "label": "Sidebar File Label",
+      "description": "Show the document title or the filename for files in the sidebar",
+      "category": "Appearance",
+      "type": "enum",
+      "options": ["title", "filename"],
+      "default": "title"
+    },
+    {
       "key": "appearance.editor-width",
       "label": "Editor Width",
       "description": "Editor content width mode",

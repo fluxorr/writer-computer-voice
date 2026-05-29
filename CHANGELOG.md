@@ -3,6 +3,8 @@
 ## 2026-05-28
 
 - Animate the sidebar folder caret so it rotates smoothly between collapsed (pointing right) and expanded (pointing down) instead of swapping icons instantly. The caret rotation is now the only animated transition on sidebar rows — the hover background highlight and the icon/label opacity changes apply instantly.
+- Add a "Sidebar File Label" appearance setting that chooses whether sidebar file entries show the document title (frontmatter `title:` or leading `# ` heading, falling back to the filename) or always the filename. Defaults to title, preserving current behavior.
+- Add a "Rename..." action to the sidebar file context menu, so files can be renamed from the sidebar like folders already could. It opens the existing inline rename field, which always edits the filename (not the displayed title), regardless of the Sidebar File Label setting.
 - Update the app icon across all platforms (macOS `.icns`, Windows `.ico`, Linux/Store PNGs, and Android/iOS launcher assets) and sync the marketing website favicon to match.
 - Show an arrow caret on folder hover in the sidebar, replacing the folder icon, so expand/collapse intent is clearer. Icons and labels now fade in/out with opacity rather than color transitions for a cleaner visual hierarchy.
 

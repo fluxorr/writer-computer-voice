@@ -27,6 +27,7 @@ function makeHandlers(): FileContextMenuHandlers & { calls: string[] } {
     onCopyRelativePath: () => calls.push("copy-relative-path"),
     onCopyAbsolutePath: () => calls.push("copy-absolute-path"),
     onReveal: () => calls.push("reveal"),
+    onRename: () => calls.push("rename"),
     onDelete: () => calls.push("delete"),
   };
 }
@@ -112,6 +113,7 @@ describe("buildFileMenuItemsSpec", () => {
       "---",
       "reveal:Reveal in Finder",
       "---",
+      "rename:Rename...",
       "delete:Delete",
     ]);
   });
@@ -149,6 +151,7 @@ describe("buildFileMenuItemsSpec", () => {
       "copy-relative-path",
       "copy-absolute-path",
       "reveal",
+      "rename",
       "delete",
     ]);
   });

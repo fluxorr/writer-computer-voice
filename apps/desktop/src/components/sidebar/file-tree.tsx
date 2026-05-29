@@ -9,6 +9,7 @@ import {
   useToggleDirectory,
 } from "@/hooks/use-file-tree";
 import { useOpenFile } from "@/hooks/use-tabs";
+import { useSetting } from "@/hooks/use-settings";
 import {
   getOpenFile,
   getOpenFiles,
@@ -65,6 +66,7 @@ export function FileTree({ rootPath }: FileTreeProps) {
   const invalidatePath = useInvalidatePath();
   const rewriteExpandedDir = useRewriteExpandedDir();
   const workspaceRoot = useWorkspaceRoot();
+  const fileLabelMode = useSetting("appearance.sidebar-file-label");
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
@@ -239,6 +241,9 @@ export function FileTree({ rootPath }: FileTreeProps) {
               `Failed to reveal: ${error instanceof Error ? error.message : String(error)}`,
             );
           });
+        },
+        onRename: () => {
+          setRenamingPath(entry.path);
         },
         onDelete: () => {
           void (async () => {
@@ -465,6 +470,7 @@ export function FileTree({ rootPath }: FileTreeProps) {
           onContextMenu={handleContextMenu}
           onRenameSubmit={handleRenameSubmit}
           onRenameCancel={handleRenameCancel}
+          fileLabelMode={fileLabelMode}
         />
       ))}
     </div>
