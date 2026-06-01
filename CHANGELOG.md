@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-06-01
+
+- Stabilize scrolling through documents with folded Markdown tables. Table preview widgets now provide CodeMirror with a deterministic height estimate before they enter the measured viewport, so the editor no longer suddenly changes document height, scrollbar thumb size, or scroll position as tables virtualize in.
+
 ## 2026-05-28
 
 - Animate the sidebar folder caret so it rotates smoothly between collapsed (pointing right) and expanded (pointing down) instead of swapping icons instantly. The caret rotation is now the only animated transition on sidebar rows — the hover background highlight and the icon/label opacity changes apply instantly.

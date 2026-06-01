@@ -14,11 +14,24 @@ import {
   prosemarkMarkdownSyntaxExtensions,
   selectAllDecorationsOnSelectExtension,
 } from "@/lib/prosemark-core/main";
+import { SETTINGS_SCHEMA } from "@/lib/settings-schema";
 import { parseWikiLink } from "@/lib/wiki-links";
 
 const fallbackMonospaceCodeFont =
   "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
 const codeFontFamily = `var(--pm-code-font, ${fallbackMonospaceCodeFont})`;
+
+const tableCellLineHeight = 1.4;
+const tableCellVerticalPaddingEm = 1;
+const tableWidgetVerticalPaddingEm = 0.5;
+const tableBorderWidthPx = 1;
+
+function numericSettingDefault(key: string, fallback: number): number {
+  const def = SETTINGS_SCHEMA.find((entry) => entry.key === key);
+  return typeof def?.default === "number" ? def.default : fallback;
+}
+
+const defaultEditorFontSizePx = numericSettingDefault("editor.font-size", 16);
 
 type Alignment = "left" | "center" | "right";
 
@@ -146,6 +159,15 @@ function parseMarkdownTable(text: string): ParsedTable | undefined {
   const rows = lines.slice(2).map(parseCells);
 
   return { headers, alignments, rows };
+}
+
+function estimateTableWidgetHeight(table: ParsedTable): number {
+  const visualRows = 1 + table.rows.length;
+  const rowHeight = defaultEditorFontSizePx * (tableCellLineHeight + tableCellVerticalPaddingEm);
+  const wrapperPadding = defaultEditorFontSizePx * tableWidgetVerticalPaddingEm;
+  const horizontalBorders = Math.max(0, visualRows + 1) * tableBorderWidthPx;
+
+  return Math.ceil(wrapperPadding + visualRows * rowHeight + horizontalBorders);
 }
 
 function tableSourceLineClass(isFirst: boolean, isLast: boolean): string {
@@ -372,6 +394,7 @@ class TableWidget extends WidgetType {
   constructor(
     readonly table: ParsedTable,
     readonly rawText: string,
+    private readonly heightEstimate: number,
   ) {
     super();
   }
@@ -382,6 +405,10 @@ class TableWidget extends WidgetType {
 
   ignoreEvent(): boolean {
     return false;
+  }
+
+  get estimatedHeight(): number {
+    return this.heightEstimate;
   }
 
   toDOM(): HTMLElement {
@@ -455,7 +482,7 @@ const tableFoldExtension = foldableSyntaxFacet.of({
     }
 
     return Decoration.replace({
-      widget: new TableWidget(parsed, text),
+      widget: new TableWidget(parsed, text, estimateTableWidgetHeight(parsed)),
       block: true,
       inclusiveStart: true,
     }).range(node.from, node.to);
@@ -464,7 +491,7 @@ const tableFoldExtension = foldableSyntaxFacet.of({
 
 const tableTheme = EditorView.baseTheme({
   ".cm-table-widget": {
-    padding: "0.25em 0",
+    padding: `${tableWidgetVerticalPaddingEm / 2}em 0`,
   },
   ".cm-table-inner": {
     display: "inline-block",
@@ -472,7 +499,7 @@ const tableTheme = EditorView.baseTheme({
   ".cm-table-widget table": {
     borderCollapse: "separate",
     borderSpacing: "0",
-    border: "1px solid var(--border-color, #3e3e42)",
+    border: `${tableBorderWidthPx}px solid var(--border-color, #3e3e42)`,
     borderRadius: "8px",
     overflow: "hidden",
     fontFamily: "inherit",
@@ -480,12 +507,12 @@ const tableTheme = EditorView.baseTheme({
     width: "auto",
   },
   ".cm-table-widget th, .cm-table-widget td": {
-    padding: "0.5em 0.8em",
+    padding: `${tableCellVerticalPaddingEm / 2}em 0.8em`,
     minWidth: "6em",
     fontSize: "inherit",
-    lineHeight: "1.4",
-    borderBottom: "1px solid var(--border-color, #3e3e42)",
-    borderRight: "1px solid var(--border-color, #3e3e42)",
+    lineHeight: `${tableCellLineHeight}`,
+    borderBottom: `${tableBorderWidthPx}px solid var(--border-color, #3e3e42)`,
+    borderRight: `${tableBorderWidthPx}px solid var(--border-color, #3e3e42)`,
   },
   ".cm-table-widget th:last-child, .cm-table-widget td:last-child": {
     borderRight: "none",
