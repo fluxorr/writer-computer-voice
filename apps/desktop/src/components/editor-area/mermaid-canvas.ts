@@ -388,6 +388,8 @@ export function mountMermaidCanvas(
     stage.innerHTML = "";
     stage.style.transform = "none";
     stage.style.opacity = "1";
+    stage.style.width = "100%";
+    stage.style.height = "100%";
     state.zoom = 1;
     state.panX = 0;
     state.panY = 0;
@@ -424,6 +426,8 @@ export function mountMermaidCanvas(
     }
 
     // Re-render: replace stage's SVG, reset measurement cache, refit.
+    stage.style.width = "";
+    stage.style.height = "";
     stage.innerHTML = svgHtml;
     svg = stage.querySelector("svg") as SVGSVGElement | null;
     decorateSvg(svg, opts.ariaLabel);
