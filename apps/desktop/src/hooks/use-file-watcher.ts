@@ -35,9 +35,10 @@ export function useFileWatcher() {
       });
     });
 
-    const unlistenIndexComplete = listen<number>("index:complete", () => {
+    const unlistenIndexComplete = listen<number>("index:complete", (event) => {
       if (useWorkspaceStore.getState().root) {
         useWorkspaceStore.setState((state) => ({
+          fileCount: event.payload,
           isIndexing: false,
           sidebarMetadataVersion: state.sidebarMetadataVersion + 1,
         }));

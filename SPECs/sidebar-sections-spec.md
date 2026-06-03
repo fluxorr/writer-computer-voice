@@ -11,6 +11,8 @@ Redesign the sidebar into three ordered sections: `Pinned`, `Recents`, and `Ever
 - Add a `Recents` section above Everything, sorted by file metadata recency.
 - Add `Show More` controls for Pinned and Recents.
 - Let each section collapse/expand from a caret in the section label row.
+- Hide `Recents` for small workspaces with fewer than 10 indexed files.
+- Show 4 recent files per page so Recents stays compact above the full tree.
 - Preserve existing file row behaviors: open, active highlight, title-vs-filename setting, and context menu actions.
 - Keep recent-file reads cheap by paging from an index-backed in-memory cache.
 
@@ -44,7 +46,9 @@ Redesign the sidebar into three ordered sections: `Pinned`, `Recents`, and `Ever
 - Section order: `Pinned`, `Recents`, `Everything`.
 - Each 12px section label uses normal letter spacing and has a caret immediately to the right of the label text. Clicking the label row toggles the section body.
 - Initial visible count: small enough to keep the tree prominent; `Show More` reveals/fetches the next page.
+- Recents starts at 4 visible files and reveals 4 more per `Show More`; Pinned starts at 6 and reveals 6 more per page.
 - Empty `Pinned` / `Recents` sections are hidden until they have entries.
+- `Recents` is hidden while the workspace has fewer than 10 indexed files, even if recent metadata exists.
 - Flat section rows use the same document label setting as the tree.
 - Pinned rows expose an unpin affordance and file context menu.
 

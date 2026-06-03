@@ -8,6 +8,7 @@ import { getEditorSessionSnapshot, useEditorStore } from "@/stores/editor-store"
 
 interface WorkspaceState {
   root: string | null;
+  fileCount: number;
   isIndexing: boolean;
   isStartupResolved: boolean;
   directoryCache: Map<string, DirEntry[]>;
@@ -73,6 +74,7 @@ function dedupe(paths: string[]) {
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   root: null,
+  fileCount: 0,
   isIndexing: false,
   isStartupResolved: false,
   directoryCache: new Map(),
@@ -112,6 +114,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const recents = await tauri.getRecentWorkspaces();
     set({
       root: info.root,
+      fileCount: info.file_count,
       isIndexing: true,
       directoryCache: new Map([[info.root, entries]]),
       expandedDirs: new Set(),
@@ -143,6 +146,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     });
     set({
       root: null,
+      fileCount: 0,
       directoryCache: new Map(),
       expandedDirs: new Set(),
       pinnedFiles: [],
@@ -162,6 +166,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
     set({
       root: bundle.workspace.root,
+      fileCount: bundle.workspace.file_count,
       isIndexing: true,
       directoryCache: new Map([[bundle.workspace.root, bundle.entries]]),
       expandedDirs: new Set(),

@@ -3,6 +3,7 @@
 ## 2026-06-03
 
 - Redesign the sidebar into collapsible `Pinned`, `Recents`, and `Everything` sections. The existing file tree now lives under Everything; files can be pinned/unpinned into Pinned; Recents is metadata-sorted from the workspace index with cached pagination so Show More does not rescan the workspace.
+- Keep the sidebar compact in small workspaces by hiding `Recents` below 10 indexed files, and show recent files in 4-item pages when it is visible.
 - Stop auto-expanding and scrolling the `Everything` tree when a file is opened from Pinned, Recents, search, links, or other open paths. The explicit tab context menu `Reveal in sidebar` action still expands ancestors and scrolls the tree on demand.
 - Add a large subtle shadow to the shared floating card surface used by the command palette and related popovers.
 

@@ -21,6 +21,7 @@ import {
 } from "@/hooks/editor-api";
 import {
   SIDEBAR_SECTION_PAGE_SIZE,
+  RECENTS_SECTION_PAGE_SIZE,
   usePinnedSidebarFiles,
   useRecentSidebarFiles,
 } from "@/hooks/use-sidebar-files";
@@ -50,7 +51,7 @@ export function FileBrowser() {
   const togglePinnedFile = useTogglePinnedFile();
   const removePinnedFile = useRemovePinnedFile();
   const rewritePinnedPath = useRewritePinnedPath();
-  const [recentVisibleCount, setRecentVisibleCount] = useState(SIDEBAR_SECTION_PAGE_SIZE);
+  const [recentVisibleCount, setRecentVisibleCount] = useState(RECENTS_SECTION_PAGE_SIZE);
   const [pinnedVisibleCount, setPinnedVisibleCount] = useState(SIDEBAR_SECTION_PAGE_SIZE);
   const recentFiles = useRecentSidebarFiles(recentVisibleCount);
   const pinnedEntries = usePinnedSidebarFiles(pinnedVisibleCount);
@@ -254,7 +255,7 @@ export function FileBrowser() {
                 {recentFiles.hasMore && (
                   <ShowMoreButton
                     onClick={() =>
-                      setRecentVisibleCount((count) => count + SIDEBAR_SECTION_PAGE_SIZE)
+                      setRecentVisibleCount((count) => count + RECENTS_SECTION_PAGE_SIZE)
                     }
                   />
                 )}

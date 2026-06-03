@@ -28,6 +28,10 @@ export function usePinnedFiles() {
   return useWorkspaceStore((s) => s.pinnedFiles);
 }
 
+export function useWorkspaceFileCount() {
+  return useWorkspaceStore((s) => s.fileCount);
+}
+
 export function useTogglePinnedFile() {
   return useWorkspaceStore((s) => s.togglePinnedFile);
 }

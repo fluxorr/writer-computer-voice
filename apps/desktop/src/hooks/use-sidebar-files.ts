@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
-import { usePinnedFiles, useSidebarMetadataVersion } from "@/hooks/use-file-tree";
+import {
+  usePinnedFiles,
+  useSidebarMetadataVersion,
+  useWorkspaceFileCount,
+} from "@/hooks/use-file-tree";
 import { useWorkspaceRoot } from "@/hooks/use-workspace";
 import * as tauri from "@/lib/tauri";
 import type { DirEntry } from "@/types/fs";
 
 export const SIDEBAR_SECTION_PAGE_SIZE = 6;
+export const RECENTS_SECTION_PAGE_SIZE = 4;
+export const RECENTS_MIN_WORKSPACE_FILE_COUNT = 10;
 
 const RECENTS_READ_PAGE_SIZE = 100;
 
@@ -18,12 +24,13 @@ const EMPTY_STATE: SidebarFilesState = { files: [], hasMore: false, isLoading: f
 
 export function useRecentSidebarFiles(visibleCount: number): SidebarFilesState {
   const root = useWorkspaceRoot();
+  const fileCount = useWorkspaceFileCount();
   const pinnedFiles = usePinnedFiles();
   const metadataVersion = useSidebarMetadataVersion();
   const [state, setState] = useState<SidebarFilesState>(EMPTY_STATE);
 
   useEffect(() => {
-    if (!root) {
+    if (!root || fileCount < RECENTS_MIN_WORKSPACE_FILE_COUNT) {
       setState(EMPTY_STATE);
       return;
     }
@@ -64,7 +71,7 @@ export function useRecentSidebarFiles(visibleCount: number): SidebarFilesState {
     return () => {
       cancelled = true;
     };
-  }, [metadataVersion, pinnedFiles, root, visibleCount]);
+  }, [fileCount, metadataVersion, pinnedFiles, root, visibleCount]);
 
   return state;
 }

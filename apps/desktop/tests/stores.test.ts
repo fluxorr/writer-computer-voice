@@ -60,6 +60,7 @@ describe("workspace-store", () => {
       pinnedFiles: [],
       sidebarMetadataVersion: 0,
       recentWorkspaces: [],
+      fileCount: 0,
     });
   });
 
@@ -75,6 +76,7 @@ describe("workspace-store", () => {
     await useWorkspaceStore.getState().openWorkspace("/test");
 
     expect(useWorkspaceStore.getState().root).toBe("/test");
+    expect(useWorkspaceStore.getState().fileCount).toBe(2);
     expect(useWorkspaceStore.getState().directoryCache.has("/test")).toBe(true);
     expect(useWorkspaceStore.getState().recentWorkspaces).toEqual(["/test"]);
     expect(useEditorStore.getState().tabs).toEqual([
