@@ -54,7 +54,7 @@ export function CompactFileLayout() {
                 <motion.div
                   layoutId={PICKER_SURFACE_LAYOUT_ID}
                   transition={pickerTransition}
-                  className="absolute inset-0 rounded-lg bg-[var(--surface-input)] transition-colors group-hover:bg-[var(--surface-subtle-strong)]"
+                  className="absolute inset-0 rounded-lg bg-transparent transition-colors group-hover:bg-[var(--surface-input)]"
                 />
               )}
               <span className="relative min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">

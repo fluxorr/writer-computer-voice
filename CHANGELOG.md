@@ -5,7 +5,7 @@
 - Redesign the sidebar into collapsible `Pinned`, `Recents`, and `Everything` sections. The existing file tree now lives under Everything; files can be pinned/unpinned into Pinned; Recents is metadata-sorted from the workspace index with cached pagination so Show More does not rescan the workspace.
 - Keep the sidebar compact in small workspaces by hiding `Recents` below 10 indexed files, and show recent files in 4-item pages when it is visible.
 - Add compact single-file windows. Opening a markdown file directly now uses editor-only chrome with no sidebar, sidebar toggle, or tabs; a top dropdown reuses the real Pinned, Recents, and Everything navigation to switch files while staying compact.
-- Animate the compact file picker so the centered title pill morphs into the picker surface instead of popping open. The pill now shrink-wraps the title up to 240px, truncates long names, and keeps the caret inline with the text.
+- Animate the compact file picker so the centered title pill morphs into the picker surface instead of popping open. The pill now shrink-wraps the title up to 240px, truncates long names, keeps the caret inline with the text, and only shows its background on hover.
 - Stop auto-expanding and scrolling the `Everything` tree when a file is opened from Pinned, Recents, search, links, or other open paths. The explicit tab context menu `Reveal in sidebar` action still expands ancestors and scrolls the tree on demand.
 - Add a large subtle shadow to the shared floating card surface used by the command palette and related popovers.
 
