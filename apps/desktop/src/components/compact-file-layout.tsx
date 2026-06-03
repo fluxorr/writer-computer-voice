@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { Popover } from "@base-ui/react/popover";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { LayoutGroup, motion } from "motion/react";
@@ -41,13 +42,9 @@ export function CompactFileLayout() {
         }}
       >
         <LayoutGroup>
-          <div className="relative flex justify-center">
-            <button
-              type="button"
-              aria-haspopup="tree"
-              aria-expanded={isNavigatorOpen}
+          <Popover.Root open={isNavigatorOpen} onOpenChange={(open) => setIsNavigatorOpen(open)}>
+            <Popover.Trigger
               aria-label="Open file navigator"
-              onClick={() => setIsNavigatorOpen((open) => !open)}
               className="group relative inline-flex h-[var(--chrome-control-height)] max-w-[min(240px,calc(100vw-40px))] items-center justify-center gap-1.5 rounded-lg border border-transparent bg-transparent px-3 text-[13px] text-[var(--fg-base)]"
             >
               {!isNavigatorOpen && (
@@ -73,14 +70,17 @@ export function CompactFileLayout() {
                   strokeWidth={2}
                 />
               </span>
-            </button>
+            </Popover.Trigger>
 
-            {isNavigatorOpen && (
-              <div className="absolute left-1/2 top-[calc(100%+8px)] w-[min(360px,calc(100vw-40px))] -translate-x-1/2">
-                <motion.div
-                  layoutId={PICKER_SURFACE_LAYOUT_ID}
-                  transition={pickerTransition}
-                  className="surface-card relative w-full overflow-hidden rounded-xl"
+            <Popover.Portal>
+              <Popover.Positioner side="bottom" align="center" sideOffset={8} className="z-50">
+                <Popover.Popup
+                  initialFocus={false}
+                  finalFocus={false}
+                  render={
+                    <motion.div layoutId={PICKER_SURFACE_LAYOUT_ID} transition={pickerTransition} />
+                  }
+                  className="surface-card relative w-[min(360px,calc(100vw-40px))] overflow-hidden rounded-xl outline-none"
                 >
                   <motion.div layout="size" transition={pickerTransition}>
                     <ScrollFade className="max-h-[min(70vh,560px)] overflow-y-auto px-2 py-3 scrollbar-none">
@@ -92,10 +92,10 @@ export function CompactFileLayout() {
                       />
                     </ScrollFade>
                   </motion.div>
-                </motion.div>
-              </div>
-            )}
-          </div>
+                </Popover.Popup>
+              </Popover.Positioner>
+            </Popover.Portal>
+          </Popover.Root>
         </LayoutGroup>
       </div>
 
