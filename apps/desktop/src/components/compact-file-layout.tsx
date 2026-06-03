@@ -37,21 +37,21 @@ export function CompactFileLayout() {
           paddingBlock: "var(--chrome-control-padding)",
         }}
       >
-        <div className="relative w-[min(420px,calc(100vw-40px))]">
+        <div className="relative w-[min(240px,calc(100vw-40px))]">
           <button
             type="button"
             aria-haspopup="tree"
             aria-expanded={isNavigatorOpen}
             aria-label="Open file navigator"
             onClick={() => setIsNavigatorOpen((open) => !open)}
-            className="flex h-[var(--chrome-control-height)] w-full items-center gap-2 rounded-lg border border-transparent bg-[var(--surface-input)] px-3 text-left text-[13px] text-[var(--fg-base)] transition-colors hover:bg-[var(--surface-subtle-strong)]"
+            className="relative flex h-[var(--chrome-control-height)] w-full items-center justify-center rounded-lg border border-transparent bg-[var(--surface-input)] px-9 text-center text-[13px] text-[var(--fg-base)] transition-colors hover:bg-[var(--surface-subtle-strong)]"
           >
-            <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+            <span className="min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap">
               {title}
             </span>
             <span
               aria-hidden="true"
-              className={`shrink-0 text-[var(--text-icon-muted)] transition-transform duration-150 ease-out ${
+              className={`absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-icon-muted)] transition-transform duration-150 ease-out ${
                 isNavigatorOpen ? "rotate-180" : ""
               }`}
             >
@@ -65,7 +65,7 @@ export function CompactFileLayout() {
           </button>
 
           {isNavigatorOpen && (
-            <SurfaceCard className="absolute left-1/2 top-[calc(100%+8px)] w-[min(560px,calc(100vw-40px))] -translate-x-1/2 overflow-hidden rounded-xl">
+            <SurfaceCard className="absolute left-1/2 top-[calc(100%+8px)] w-[min(360px,calc(100vw-40px))] -translate-x-1/2 overflow-hidden rounded-xl">
               <ScrollFade className="max-h-[min(70vh,560px)] overflow-y-auto px-2 py-3 scrollbar-none">
                 <SidebarNavigator
                   openFile={handleOpenFile}
