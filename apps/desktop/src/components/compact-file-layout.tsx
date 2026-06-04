@@ -147,28 +147,40 @@ export function CompactFileLayout() {
     };
   }, []);
 
-  const pickerCardLeft = isNavigatorOpen
+  const pickerOpenTop = pickerMetrics.triggerHeight + PICKER_GAP_PX;
+  const pickerShellHeight = pickerOpenTop + pickerMetrics.openHeight;
+  const pickerMaskLeft = isNavigatorOpen
     ? 0
     : Math.max(0, (pickerMetrics.rootWidth - pickerMetrics.triggerWidth) / 2);
-  const pickerCardTop = isNavigatorOpen ? pickerMetrics.triggerHeight + PICKER_GAP_PX : 0;
-  const pickerCardWidth = isNavigatorOpen ? pickerMetrics.rootWidth : pickerMetrics.triggerWidth;
-  const pickerCardHeight = isNavigatorOpen ? pickerMetrics.openHeight : pickerMetrics.triggerHeight;
-  const pickerCardStyle = {
-    left: `${pickerCardLeft}px`,
-    top: `${pickerCardTop}px`,
-    width: `${pickerCardWidth}px`,
-    height: `${pickerCardHeight}px`,
-    "--compact-picker-card-radius": isNavigatorOpen
-      ? `${PICKER_OPEN_RADIUS}px`
-      : `${PICKER_CLOSED_RADIUS}px`,
-    "--compact-picker-card-shadow": isNavigatorOpen
-      ? "0 15px 35px rgba(0, 0, 0, 0.15)"
-      : "0 0 0 rgba(0, 0, 0, 0)",
+  const pickerMaskTop = isNavigatorOpen ? pickerOpenTop : 0;
+  const pickerMaskWidth = isNavigatorOpen ? pickerMetrics.rootWidth : pickerMetrics.triggerWidth;
+  const pickerMaskHeight = isNavigatorOpen ? pickerMetrics.openHeight : pickerMetrics.triggerHeight;
+  const pickerMaskRadius = isNavigatorOpen ? PICKER_OPEN_RADIUS : PICKER_CLOSED_RADIUS;
+  const pickerMaskRight = Math.max(0, pickerMetrics.rootWidth - pickerMaskLeft - pickerMaskWidth);
+  const pickerMaskBottom = Math.max(0, pickerShellHeight - pickerMaskTop - pickerMaskHeight);
+  const pickerMaskClipPath = `inset(${pickerMaskTop}px ${pickerMaskRight}px ${pickerMaskBottom}px ${pickerMaskLeft}px round ${pickerMaskRadius}px)`;
+  const pickerShellStyle = {
+    width: `${pickerMetrics.rootWidth}px`,
+    height: `${pickerShellHeight}px`,
+    "--compact-picker-card-clip-path": pickerMaskClipPath,
+    "--compact-picker-shadow-filter": isNavigatorOpen
+      ? "drop-shadow(0 15px 35px rgba(0, 0, 0, 0.15))"
+      : "drop-shadow(0 0 0 rgba(0, 0, 0, 0))",
   } as CSSProperties;
   const pickerNavigatorStyle = {
+    position: "absolute",
+    left: 0,
+    top: `${pickerOpenTop}px`,
     width: `${pickerMetrics.rootWidth}px`,
     height: `${pickerMetrics.openHeight}px`,
-  };
+  } as CSSProperties;
+  const pickerBorderStyle = {
+    "--compact-picker-border-x": `${pickerMaskLeft}px`,
+    "--compact-picker-border-y": `${pickerMaskTop}px`,
+    "--compact-picker-border-width": `${pickerMaskWidth}px`,
+    "--compact-picker-border-height": `${pickerMaskHeight}px`,
+    "--compact-picker-border-radius": `${pickerMaskRadius}px`,
+  } as CSSProperties;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-transparent text-text-primary">
@@ -192,31 +204,51 @@ export function CompactFileLayout() {
             id={isPickerMounted ? PICKER_POPUP_ID : undefined}
             role={isPickerMounted ? "dialog" : undefined}
             aria-label={isPickerMounted ? "File navigator" : undefined}
-            className={`compact-picker-card absolute z-0 ${
+            className={`compact-picker-shell absolute left-0 top-0 z-0 ${
               isPickerMounted ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             }`}
             style={{
-              ...pickerCardStyle,
+              ...pickerShellStyle,
               pointerEvents: isNavigatorOpen ? "auto" : "none",
             }}
           >
+            <div aria-hidden="true" className="compact-picker-card-surface absolute inset-0" />
             {isPickerMounted && (
               <div
-                className={`relative z-10 transition-opacity duration-100 ease-out ${
+                className={`compact-picker-card-mask absolute inset-0 z-10 transition-opacity duration-100 ease-out ${
                   isNavigatorOpen ? "opacity-100" : "opacity-0"
                 }`}
-                style={pickerNavigatorStyle}
               >
-                <ScrollFade className="h-full overflow-y-auto px-2 py-3 scrollbar-none">
-                  <SidebarNavigator
-                    openFile={handleOpenFile}
-                    enableContextMenus={false}
-                    onOpenFileComplete={closeNavigator}
-                    className="flex flex-col gap-4"
-                  />
-                </ScrollFade>
+                <div style={pickerNavigatorStyle}>
+                  <ScrollFade className="h-full overflow-y-auto px-2 py-3 scrollbar-none">
+                    <SidebarNavigator
+                      openFile={handleOpenFile}
+                      enableContextMenus={false}
+                      onOpenFileComplete={closeNavigator}
+                      className="flex flex-col gap-4"
+                    />
+                  </ScrollFade>
+                </div>
               </div>
             )}
+            <svg
+              aria-hidden="true"
+              className="compact-picker-border-layer"
+              width={pickerMetrics.rootWidth}
+              height={pickerShellHeight}
+              viewBox={`0 0 ${pickerMetrics.rootWidth} ${pickerShellHeight}`}
+            >
+              <rect
+                className="compact-picker-border-rect"
+                x={pickerMaskLeft}
+                y={pickerMaskTop}
+                width={pickerMaskWidth}
+                height={pickerMaskHeight}
+                rx={pickerMaskRadius}
+                ry={pickerMaskRadius}
+                style={pickerBorderStyle}
+              />
+            </svg>
           </div>
 
           <button

@@ -239,7 +239,19 @@ input {
   pointer-events: none;
 }
 
-.compact-picker-card {
+.compact-picker-shell {
+  isolation: isolate;
+  overflow: visible;
+  transition: opacity 150ms ease-out;
+}
+
+.compact-picker-card-surface,
+.compact-picker-card-mask {
+  clip-path: var(--compact-picker-card-clip-path);
+  transition: clip-path 240ms cubic-bezier(0.32, 0, 0.2, 1);
+}
+
+.compact-picker-card-surface {
   background:
     linear-gradient(
       color-mix(in srgb, var(--bg-base) 55%, transparent),
@@ -248,19 +260,42 @@ input {
     var(--surface-card);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--line-subtler);
-  border-radius: var(--compact-picker-card-radius);
-  box-shadow: var(--compact-picker-card-shadow);
-  isolation: isolate;
-  overflow: hidden;
+  filter: var(--compact-picker-shadow-filter);
   transition:
-    opacity 150ms ease-out,
-    left 240ms cubic-bezier(0.32, 0, 0.2, 1),
-    top 240ms cubic-bezier(0.32, 0, 0.2, 1),
+    clip-path 240ms cubic-bezier(0.32, 0, 0.2, 1),
+    filter 240ms cubic-bezier(0.32, 0, 0.2, 1);
+}
+
+.compact-picker-card-mask {
+  overflow: hidden;
+}
+
+.compact-picker-border-layer {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.compact-picker-border-rect {
+  x: var(--compact-picker-border-x);
+  y: var(--compact-picker-border-y);
+  width: var(--compact-picker-border-width);
+  height: var(--compact-picker-border-height);
+  rx: var(--compact-picker-border-radius);
+  ry: var(--compact-picker-border-radius);
+  fill: none;
+  stroke: var(--line-subtler);
+  stroke-width: 1;
+  transition:
+    x 240ms cubic-bezier(0.32, 0, 0.2, 1),
+    y 240ms cubic-bezier(0.32, 0, 0.2, 1),
     width 240ms cubic-bezier(0.32, 0, 0.2, 1),
     height 240ms cubic-bezier(0.32, 0, 0.2, 1),
-    border-radius 240ms cubic-bezier(0.32, 0, 0.2, 1),
-    box-shadow 240ms cubic-bezier(0.32, 0, 0.2, 1);
+    rx 240ms cubic-bezier(0.32, 0, 0.2, 1),
+    ry 240ms cubic-bezier(0.32, 0, 0.2, 1);
+  vector-effect: non-scaling-stroke;
 }
 
 /* CodeMirror autocomplete tooltip (wiki-link suggestions). Mirrors the
