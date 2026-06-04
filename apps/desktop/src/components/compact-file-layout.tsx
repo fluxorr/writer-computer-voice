@@ -14,6 +14,7 @@ import { getFileName } from "@/lib/paths";
 
 const PICKER_POPUP_ID = "compact-file-picker-popup";
 const PICKER_ANIMATION_MS = 240;
+const PICKER_TRIGGER_BG_CLOSE_DELAY_MS = 90;
 const PICKER_GAP_PX = 8;
 const PICKER_MAX_OPEN_HEIGHT = 560;
 const PICKER_VIEWPORT_HEIGHT_OFFSET = 96;
@@ -163,6 +164,9 @@ export function CompactFileLayout() {
     "--compact-picker-card-clip-path": pickerMaskClipPath,
     "--compact-picker-border-color": isNavigatorOpen ? "var(--line-subtler)" : "transparent",
     "--compact-picker-trigger-bg-opacity": isNavigatorOpen ? "0" : "0.09",
+    "--compact-picker-trigger-bg-delay": isNavigatorOpen
+      ? "0ms"
+      : `${PICKER_TRIGGER_BG_CLOSE_DELAY_MS}ms`,
   } as CSSProperties;
   const pickerNavigatorStyle = {
     position: "absolute",

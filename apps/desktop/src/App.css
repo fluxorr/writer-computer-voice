@@ -246,6 +246,7 @@ input {
     transparent
   );
   --compact-picker-trigger-bg-opacity: 0;
+  --compact-picker-trigger-bg-delay: 0ms;
   isolation: isolate;
   overflow: visible;
   transition: opacity 150ms ease-out;
@@ -276,7 +277,7 @@ input {
   background: var(--compact-picker-trigger-bg-tint);
   opacity: var(--compact-picker-trigger-bg-opacity);
   pointer-events: none;
-  transition: opacity 180ms cubic-bezier(0.32, 0, 0.2, 1);
+  transition: opacity 180ms cubic-bezier(0.32, 0, 0.2, 1) var(--compact-picker-trigger-bg-delay);
   will-change: opacity;
 }
 
