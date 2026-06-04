@@ -271,7 +271,7 @@ input {
 }
 
 [data-theme="dark"] .compact-picker-shell {
-  --compact-picker-trigger-bg-tint: color-mix(in srgb, var(--fg-base) 10%, transparent);
+  --compact-picker-trigger-bg-tint: color-mix(in srgb, var(--fg-base) 8%, transparent);
 }
 
 [data-theme="light"] .compact-picker-shell {
