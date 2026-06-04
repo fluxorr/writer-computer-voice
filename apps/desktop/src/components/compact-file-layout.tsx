@@ -189,12 +189,37 @@ export function CompactFileLayout() {
           className="group pointer-events-auto relative isolate flex w-[min(360px,calc(100vw-40px))] justify-center"
         >
           <div
-            aria-hidden="true"
-            className={`compact-picker-card pointer-events-none absolute left-0 z-0 w-full ${
+            id={isPickerMounted ? PICKER_POPUP_ID : undefined}
+            role={isPickerMounted ? "dialog" : undefined}
+            aria-label={isPickerMounted ? "File navigator" : undefined}
+            className={`compact-picker-card absolute left-0 z-0 w-full ${
               isPickerMounted ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             }`}
-            style={pickerCardStyle}
-          />
+            style={{
+              ...pickerCardStyle,
+              pointerEvents: isNavigatorOpen ? "auto" : "none",
+            }}
+          >
+            {isPickerMounted && (
+              <div
+                className={`relative z-10 h-full transition-opacity duration-100 ease-out ${
+                  isNavigatorOpen ? "opacity-100" : "opacity-0"
+                }`}
+                style={{
+                  transitionDelay: isNavigatorOpen ? `${PICKER_ANIMATION_MS}ms` : "0ms",
+                }}
+              >
+                <ScrollFade className="h-full overflow-y-auto px-2 py-3 scrollbar-none">
+                  <SidebarNavigator
+                    openFile={handleOpenFile}
+                    enableContextMenus={false}
+                    onOpenFileComplete={closeNavigator}
+                    className="flex flex-col gap-4"
+                  />
+                </ScrollFade>
+              </div>
+            )}
+          </div>
 
           <button
             ref={triggerRef}
@@ -223,35 +248,6 @@ export function CompactFileLayout() {
               />
             </span>
           </button>
-
-          {isPickerMounted && (
-            <div
-              id={PICKER_POPUP_ID}
-              role="dialog"
-              aria-label="File navigator"
-              className="absolute left-0 z-20 w-full rounded-xl outline-none"
-              style={{
-                top: PICKER_OPEN_TOP,
-                height: pickerOpenHeight,
-                pointerEvents: isNavigatorOpen ? "auto" : "none",
-              }}
-            >
-              <div
-                className={`relative h-full overflow-hidden rounded-xl transition-opacity duration-100 ease-out ${
-                  isNavigatorOpen ? "opacity-100 delay-100" : "opacity-0"
-                }`}
-              >
-                <ScrollFade className="h-full overflow-y-auto px-2 py-3 scrollbar-none">
-                  <SidebarNavigator
-                    openFile={handleOpenFile}
-                    enableContextMenus={false}
-                    onOpenFileComplete={closeNavigator}
-                    className="flex flex-col gap-4"
-                  />
-                </ScrollFade>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
