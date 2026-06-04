@@ -19,7 +19,6 @@ const PICKER_ANIMATION_MS = 240;
 const PICKER_GAP_PX = 8;
 const PICKER_GAP = `${PICKER_GAP_PX}px`;
 const PICKER_OPEN_TOP = `calc(var(--chrome-control-height) + ${PICKER_GAP})`;
-const PICKER_OPEN_CLIP_PATH = "inset(0 0 0 0 round 12px)";
 const PICKER_MAX_OPEN_HEIGHT = 560;
 const PICKER_VIEWPORT_HEIGHT_OFFSET = 96;
 const PICKER_CLOSED_RADIUS = 8;
@@ -150,21 +149,15 @@ export function CompactFileLayout() {
     };
   }, []);
 
-  const pickerClipPath = isNavigatorOpen
-    ? PICKER_OPEN_CLIP_PATH
-    : `inset(0 calc((100% - ${pickerMetrics.triggerWidth}px) / 2) calc(100% - ${pickerMetrics.triggerHeight}px) calc((100% - ${pickerMetrics.triggerWidth}px) / 2) round 8px)`;
   const pickerOpenHeight = `${pickerMetrics.openHeight}px`;
-  const pickerShellHeightValue =
-    pickerMetrics.triggerHeight + PICKER_GAP_PX + pickerMetrics.openHeight;
-  const pickerShellHeight = `${pickerShellHeightValue}px`;
   const pickerCardScaleX = Math.max(0.01, pickerMetrics.triggerWidth / pickerMetrics.rootWidth);
-  const pickerCardScaleY = Math.max(0.01, pickerMetrics.triggerHeight / pickerShellHeightValue);
+  const pickerCardScaleY = Math.max(0.01, pickerMetrics.triggerHeight / pickerMetrics.openHeight);
   const pickerCardTransform = isNavigatorOpen
     ? "scale(1, 1)"
     : `scale(${pickerCardScaleX}, ${pickerCardScaleY})`;
   const pickerCardStyle = {
-    height: pickerShellHeight,
-    "--compact-picker-fill-clip-path": pickerClipPath,
+    top: isNavigatorOpen ? PICKER_OPEN_TOP : 0,
+    height: pickerOpenHeight,
     "--compact-picker-card-transform": pickerCardTransform,
     "--compact-picker-card-radius-x": isNavigatorOpen
       ? `${PICKER_OPEN_RADIUS}px`
@@ -197,7 +190,7 @@ export function CompactFileLayout() {
         >
           <div
             aria-hidden="true"
-            className={`compact-picker-card pointer-events-none absolute left-0 top-0 z-0 w-full rounded-xl ${
+            className={`compact-picker-card pointer-events-none absolute left-0 z-0 w-full ${
               isPickerMounted ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             }`}
             style={pickerCardStyle}
