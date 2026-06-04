@@ -240,6 +240,12 @@ input {
 }
 
 .compact-picker-shell {
+  --compact-picker-trigger-bg-tint: color-mix(
+    in srgb,
+    var(--fg-base) calc(var(--contrast) * 22%),
+    transparent
+  );
+  --compact-picker-trigger-tint: transparent;
   isolation: isolate;
   overflow: visible;
   transition: opacity 150ms ease-out;
@@ -253,12 +259,6 @@ input {
 }
 
 .compact-picker-card-surface {
-  --compact-picker-trigger-bg-tint: color-mix(
-    in srgb,
-    var(--fg-base) calc(var(--contrast) * 22%),
-    transparent
-  );
-  --compact-picker-trigger-tint: transparent;
   background:
     linear-gradient(var(--compact-picker-trigger-tint), var(--compact-picker-trigger-tint)),
     linear-gradient(
@@ -270,15 +270,11 @@ input {
   -webkit-backdrop-filter: blur(16px);
 }
 
-[data-theme="dark"] .compact-picker-card-surface {
-  --compact-picker-trigger-bg-tint: color-mix(
-    in srgb,
-    var(--fg-base) calc(var(--contrast) * 60%),
-    transparent
-  );
+[data-theme="dark"] .compact-picker-shell {
+  --compact-picker-trigger-bg-tint: color-mix(in srgb, var(--fg-base) 60%, transparent);
 }
 
-[data-theme="light"] .compact-picker-card-surface {
+[data-theme="light"] .compact-picker-shell {
   --compact-picker-trigger-bg-tint: color-mix(in srgb, var(--bg-base) 40%, transparent);
 }
 
