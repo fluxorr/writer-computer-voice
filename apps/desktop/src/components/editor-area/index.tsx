@@ -3,7 +3,11 @@ import { pageKind } from "./page-kinds";
 import { EditorSearchOverlay } from "./editor-search-overlay";
 import { AnchorWarningBanner } from "./anchor-warning-banner";
 
-function EditorArea() {
+interface EditorAreaProps {
+  showFooter?: boolean;
+}
+
+function EditorArea({ showFooter = true }: EditorAreaProps) {
   const activeTab = useActiveTab();
   const activeTabId = useActiveTabId();
   const tabs = useOpenTabs();
@@ -22,7 +26,9 @@ function EditorArea() {
           return <Component key={tab.id} location={tab.location} isActive={isActive} />;
         })}
       </div>
-      {activeTab ? pageKind(activeTab.location).renderFooter?.(activeTab.location) : null}
+      {showFooter && activeTab
+        ? pageKind(activeTab.location).renderFooter?.(activeTab.location)
+        : null}
       <EditorSearchOverlay />
       <AnchorWarningBanner />
     </div>
