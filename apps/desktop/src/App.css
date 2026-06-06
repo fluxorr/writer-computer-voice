@@ -305,7 +305,7 @@ input {
 
 .compact-picker-content-scale {
   transform: scale(var(--compact-picker-content-scale-x), var(--compact-picker-content-scale-y));
-  transform-origin: top left;
+  transform-origin: top center;
   will-change: transform;
 }
 

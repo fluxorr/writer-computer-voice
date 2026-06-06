@@ -6,6 +6,7 @@
 
 ## Done
 
+- Compact picker center anchoring — counter-scale the picker content from the horizontal center so the navigator stays centered while the popover expands.
 - Compact footer polish — hide the document stats footer in compact chrome while leaving the normal workspace footer unchanged.
 - Compact mode setting: [`SPECs/compact-mode-setting-spec.md`](SPECs/compact-mode-setting-spec.md) — make compact chrome a persisted appearance setting with a command-palette toggle, while removing the debug-only compact launch environment variable.
 - Compact single-file window: [`SPECs/compact-window-spec.md`](SPECs/compact-window-spec.md) — use compact chrome for explicit single-file opens with no sidebar, no sidebar toggle, no tab strip, and a top dropdown that reuses Pinned, Recents, and Everything navigation.
