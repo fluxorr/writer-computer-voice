@@ -249,7 +249,7 @@ input {
   --compact-picker-trigger-bg-delay: 0ms;
   isolation: isolate;
   overflow: visible;
-  transition: opacity 150ms ease-out;
+  transition: opacity 260ms cubic-bezier(0.32, 0, 0.2, 1);
 }
 
 .compact-picker-card-frame {

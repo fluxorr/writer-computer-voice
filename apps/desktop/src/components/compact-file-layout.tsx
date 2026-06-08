@@ -15,6 +15,7 @@ import { getFileName } from "@/lib/paths";
 const PICKER_POPUP_ID = "compact-file-picker-popup";
 const PICKER_ANIMATION_MS = 260;
 const PICKER_TRIGGER_BG_CLOSE_DELAY_MS = 90;
+const PICKER_TRIGGER_SURFACE_CLOSE_HOLD_MS = 300;
 const PICKER_GAP_PX = 8;
 const PICKER_MAX_LIST_HEIGHT = 420;
 const PICKER_VIEWPORT_HEIGHT_OFFSET = 96;
@@ -156,7 +157,7 @@ export function CompactFileLayout() {
     if (isNavigatorOpen || !isPickerMounted) return;
     const timeout = window.setTimeout(() => {
       setIsPickerMounted(false);
-    }, PICKER_ANIMATION_MS);
+    }, PICKER_ANIMATION_MS + PICKER_TRIGGER_SURFACE_CLOSE_HOLD_MS);
     return () => window.clearTimeout(timeout);
   }, [isNavigatorOpen, isPickerMounted]);
 

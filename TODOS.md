@@ -6,6 +6,7 @@
 
 ## Done
 
+- Compact picker trigger close hold — keep the closed trigger surface visible for 300ms after the picker close morph, then fade it with the picker opacity curve.
 - Compact picker shadow fade — move the light-mode popover shadow to an opacity-animated layer so it fades out on close.
 - Compact picker light trigger fill — make the light-mode compact trigger use a subtle gray tint instead of a near-white fill.
 - Compact picker light shadow — add a subtle floating-card-style shadow to the compact picker popover in light mode.
