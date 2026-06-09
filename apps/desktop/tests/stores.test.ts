@@ -19,6 +19,9 @@ import { toggleSidebar } from "../src/hooks/use-sidebar";
 import { toggleTheme } from "../src/hooks/use-theme";
 import { createPendingOpenDrainer, handleOpenPayload } from "../src/hooks/use-open-drop";
 import { getEditorSessionSnapshot } from "../src/stores/editor-store";
+// Side-effect: registers the subscription that re-points the standalone
+// single-file watcher whenever the active file changes in a compact window.
+import "../src/lib/standalone-watch";
 
 const mockedInvoke = vi.mocked(invoke);
 
@@ -913,6 +916,27 @@ describe("handleOpenPayload", () => {
     expect(tabPaths()).toEqual(["/anywhere/note.md"]);
     expect(mockedInvoke).toHaveBeenCalledWith("watch_standalone_file", {
       path: "/anywhere/note.md",
+    });
+  });
+
+  test("navigating to a linked file in a compact window re-points the watcher", async () => {
+    mockedInvoke.mockImplementation((command, args) =>
+      Promise.resolve(
+        command === "read_file"
+          ? { path: (args as { path?: string })?.path, content: "n", modified_at: 1 }
+          : undefined,
+      ),
+    );
+    useWorkspaceStore.setState({ root: null });
+
+    // Open the first standalone file, then follow an internal link to another.
+    await handleOpenPayload({ workspace: null, file: "/anywhere/a.md" });
+    await useEditorStore.getState().navigateToFile("/anywhere/b.md");
+
+    expect(useWorkspaceStore.getState().chromeMode).toBe("compact-file");
+    expect(tabPaths()).toEqual(["/anywhere/b.md"]);
+    expect(mockedInvoke).toHaveBeenCalledWith("watch_standalone_file", {
+      path: "/anywhere/b.md",
     });
   });
 

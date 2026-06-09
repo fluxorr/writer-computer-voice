@@ -6,10 +6,19 @@ import {
   useRef,
   useState,
 } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { EditorArea } from "./editor-area";
 import { CompactRecentsList } from "./compact-recents-list";
 import { ScrollFade } from "@/components/scroll-fade";
-import { useActiveFilePath, useOpenFiles } from "@/hooks/use-tabs";
+import {
+  useActiveFilePath,
+  useCanNavigateBack,
+  useCanNavigateForward,
+  useNavigateBack,
+  useNavigateForward,
+  useOpenFiles,
+} from "@/hooks/use-tabs";
 import { openStandaloneFile } from "@/hooks/use-open-drop";
 import { getFileName } from "@/lib/paths";
 
@@ -299,6 +308,15 @@ export function CompactFileLayout() {
         style={{ height: "var(--chrome-drag-height)" }}
       />
       <div
+        className="pointer-events-none absolute left-0 top-0 z-50 flex items-center"
+        style={{
+          height: "calc(var(--chrome-control-height) + var(--chrome-control-padding) * 2)",
+          padding: "var(--chrome-control-padding) 12px var(--chrome-control-padding) 92px",
+        }}
+      >
+        <CompactNavControls />
+      </div>
+      <div
         className="pointer-events-none absolute inset-x-0 top-0 z-50 flex justify-center"
         style={{
           height: "calc(var(--chrome-control-height) + var(--chrome-control-padding) * 2)",
@@ -408,6 +426,51 @@ export function CompactFileLayout() {
         <EditorArea showFooter={false} />
       </div>
     </div>
+  );
+}
+
+function CompactNavControls() {
+  const navigateBack = useNavigateBack();
+  const navigateForward = useNavigateForward();
+  const canNavigateBack = useCanNavigateBack();
+  const canNavigateForward = useCanNavigateForward();
+
+  return (
+    <div className="pointer-events-auto flex items-center gap-0.5">
+      <CompactNavButton
+        label="Back"
+        icon={ArrowLeft01Icon}
+        disabled={!canNavigateBack}
+        onClick={() => void navigateBack()}
+      />
+      <CompactNavButton
+        label="Forward"
+        icon={ArrowRight01Icon}
+        disabled={!canNavigateForward}
+        onClick={() => void navigateForward()}
+      />
+    </div>
+  );
+}
+
+interface CompactNavButtonProps {
+  label: string;
+  icon: typeof ArrowLeft01Icon;
+  disabled: boolean;
+  onClick: () => void;
+}
+
+function CompactNavButton({ label, icon, disabled, onClick }: CompactNavButtonProps) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex h-[var(--chrome-control-height)] w-[var(--chrome-control-height)] items-center justify-center rounded-lg text-[var(--text-icon-muted)] transition-colors hover:bg-[var(--surface-subtle)] hover:text-[var(--fg-base)] disabled:pointer-events-none disabled:opacity-30"
+    >
+      <HugeiconsIcon icon={icon} size={18} color="currentColor" strokeWidth={1.8} />
+    </button>
   );
 }
 

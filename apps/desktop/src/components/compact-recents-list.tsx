@@ -3,7 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { File02Icon, FolderLibraryIcon } from "@hugeicons/core-free-icons";
 import { useGlobalRecentFiles } from "@/hooks/use-global-recent-files";
 import { useActiveFilePath } from "@/hooks/use-tabs";
-import { getFileStem, getParentDir } from "@/lib/paths";
+import { getFileStem } from "@/lib/paths";
 import * as tauri from "@/lib/tauri";
 import type { DirEntry } from "@/types/fs";
 
@@ -98,9 +98,6 @@ function RecentFileRow({ entry, isActive, onOpen }: RecentFileRowProps) {
         <HugeiconsIcon icon={File02Icon} size={16} color="currentColor" strokeWidth={1.8} />
       </span>
       <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
-      <span className="min-w-0 shrink-[2] overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-[var(--text-muted)]">
-        {getParentDir(entry.path)}
-      </span>
     </button>
   );
 }

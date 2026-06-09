@@ -8,19 +8,13 @@ import type { PendingOpenPayload } from "@/lib/tauri";
 import type { FileContent } from "@/types/fs";
 import * as tauri from "@/lib/tauri";
 
-/** Open a file in this window's standalone compact chrome and re-point the
- *  single-file watcher at it. The shared path for startup, drag-drop, the
- *  compact picker, and the command palette. */
+/** Open a file in this window's standalone compact chrome. The shared path
+ *  for startup, drag-drop, the compact picker, and the command palette. The
+ *  single-file watcher is re-pointed by the `standalone-watch` subscription
+ *  whenever the active file changes (covers links and back/forward too). */
 export async function openStandaloneFile(path: string, prefetched: FileContent | null = null) {
   useWorkspaceStore.getState().setChromeMode("compact-file");
   await useEditorStore.getState().openCompactFile(path, prefetched);
-  // Startup already started the watcher Rust-side; re-watching the same
-  // path is harmless and keeps this a single code path.
-  try {
-    await tauri.watchStandaloneFile(path);
-  } catch (error) {
-    console.error("Failed to watch standalone file", error);
-  }
 }
 
 export async function handleOpenPayload(payload: PendingOpenPayload) {
