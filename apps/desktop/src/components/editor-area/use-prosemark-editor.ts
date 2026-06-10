@@ -353,39 +353,45 @@ async function followLink(href: string | null, view: EditorView, filePath: strin
   await openPath(target.path);
 }
 
+/** Resolve the link href under a mouse event, or null if it isn't a link.
+ *  Shared by the mousedown (claim the press) and click (navigate) handlers. */
+function linkHrefAt(event: MouseEvent, view: EditorView): string | null {
+  const target = event.target;
+  if (!(target instanceof Element)) return null;
+
+  const htmlAnchor = target.closest(".cm-html-block-widget a");
+  if (htmlAnchor instanceof HTMLAnchorElement) {
+    return htmlAnchor.getAttribute("href");
+  }
+
+  const renderedLink = target.closest(".cm-rendered-link");
+  const isRenderedLink = renderedLink !== null;
+  const isRawUrl = target.closest(".cm-url") !== null;
+  if (!isRenderedLink && !isRawUrl) return null;
+
+  if (renderedLink instanceof HTMLElement && renderedLink.dataset.href) {
+    return renderedLink.dataset.href;
+  }
+  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+  if (pos === null) return null;
+  return (isRenderedLink ? getLinkHref(view, pos) : getRawUrl(view, pos)) ?? null;
+}
+
 function linkNavigationExtension(getFilePath: () => string, isDisposed: () => boolean): Extension {
   return Prec.highest(
     EditorView.domEventHandlers({
+      // Claim the press on mousedown so CodeMirror doesn't move the caret
+      // into the link (which would unfold a rendered link), but defer the
+      // actual navigation to the click (mouseup) so it follows on release.
       mousedown(event, view) {
-        const target = event.target;
-        if (!(target instanceof Element)) return false;
-
-        const htmlAnchor = target.closest(".cm-html-block-widget a");
-        if (htmlAnchor instanceof HTMLAnchorElement) {
-          event.preventDefault();
-          event.stopPropagation();
-          void followLink(htmlAnchor.getAttribute("href"), view, getFilePath()).catch((error) => {
-            if (!isDisposed()) console.error("[editor] Failed to open link:", error);
-          });
-          return true;
-        }
-
-        const renderedLink = target.closest(".cm-rendered-link");
-        const isRenderedLink = renderedLink !== null;
-        const isRawUrl = target.closest(".cm-url") !== null;
-        if (!isRenderedLink && !isRawUrl) return false;
-
-        let href =
-          renderedLink instanceof HTMLElement && renderedLink.dataset.href
-            ? renderedLink.dataset.href
-            : undefined;
-        if (!href) {
-          const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-          if (pos === null) return false;
-          href = isRenderedLink ? getLinkHref(view, pos) : getRawUrl(view, pos);
-        }
-        if (!href) return false;
-
+        if (linkHrefAt(event, view) === null) return false;
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+      },
+      click(event, view) {
+        const href = linkHrefAt(event, view);
+        if (href === null) return false;
         event.preventDefault();
         event.stopPropagation();
         void followLink(href, view, getFilePath()).catch((error) => {
