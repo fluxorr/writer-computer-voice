@@ -3,13 +3,24 @@ import { Sidebar } from "./sidebar";
 import { EditorArea } from "./editor-area";
 import { EditorTabs } from "./editor-area/editor-tabs";
 import { SidebarToggleButton } from "./sidebar/sidebar-toggle-button";
+import { CompactFileLayout } from "./compact-file-layout";
 import { useSidebar } from "@/hooks/use-sidebar";
+import { useWorkspaceChromeMode } from "@/hooks/use-workspace";
 
 function clampSidebarWidth(width: number, maxSidebarWidth: number) {
   return Math.max(220, Math.min(maxSidebarWidth, Math.round(width)));
 }
 
 export function AppLayout() {
+  const chromeMode = useWorkspaceChromeMode();
+  if (chromeMode === "compact-file") {
+    return <CompactFileLayout />;
+  }
+
+  return <WorkspaceLayout />;
+}
+
+function WorkspaceLayout() {
   const { isSidebarCollapsed, sidebarWidth, setSidebarWidth } = useSidebar();
   const viewportWidth = typeof window === "undefined" ? 1200 : window.innerWidth;
   const maxSidebarWidth = Math.max(280, Math.min(420, Math.floor(viewportWidth * 0.35)));
@@ -102,7 +113,7 @@ export function AppLayout() {
     <div className="relative h-screen w-screen overflow-hidden bg-transparent text-text-primary">
       <div
         data-tauri-drag-region
-        className="absolute inset-x-0 top-0"
+        className="absolute inset-x-0 top-0 z-30"
         style={{ height: "var(--chrome-drag-height)" }}
       />
       <div

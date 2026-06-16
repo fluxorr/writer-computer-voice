@@ -494,6 +494,106 @@ pub fn start_watcher(
     Ok(watcher)
 }
 
+/// Start a lightweight watcher for a single standalone file (compact mode,
+/// no workspace). Watches the file's *parent directory* non-recursively:
+/// watching the file inode directly would break on atomic temp+rename saves
+/// — Writer's own `write_file_impl` and most editors replace the inode, and
+/// the watch would die with the old one. Only events whose path matches the
+/// watched file are forwarded; there is no index maintenance, no ignore
+/// matching, and no directory-change fan-out.
+pub fn start_file_watcher(
+    app_handle: AppHandle,
+    window_label: String,
+    file: &Path,
+    epoch: u64,
+) -> Result<RecommendedWatcher, notify::Error> {
+    let file_path = file.to_path_buf();
+    let parent = file_path
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| notify::Error::generic("standalone file has no parent directory"))?;
+    let (tx, rx) = std::sync::mpsc::channel::<notify::Result<Event>>();
+
+    let mut watcher = RecommendedWatcher::new(
+        move |res| {
+            let _ = tx.send(res);
+        },
+        notify::Config::default().with_poll_interval(Duration::from_millis(DEBOUNCE_MS)),
+    )?;
+
+    watcher.watch(&parent, RecursiveMode::NonRecursive)?;
+    wlog!(
+        "file watcher started for {} (watching {})",
+        file_path.display(),
+        parent.display()
+    );
+
+    let handle = app_handle;
+    let label = window_label;
+    std::thread::spawn(move || {
+        let mut last_emit = Instant::now();
+        let mut pending: Vec<Event> = Vec::new();
+
+        loop {
+            match rx.recv_timeout(Duration::from_millis(DEBOUNCE_MS)) {
+                Ok(Ok(event)) => pending.push(event),
+                Ok(Err(err)) => {
+                    wlog!("file watcher recv err: {err:?}");
+                    continue;
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+
+            if pending.is_empty() || last_emit.elapsed() < Duration::from_millis(DEBOUNCE_MS) {
+                continue;
+            }
+
+            let Some(state) = handle.state::<AppState>().get(&label) else {
+                break;
+            };
+
+            // Drop the batch if the window has moved on to another file or
+            // a workspace (epoch bump on every watch target switch).
+            if state.workspace_epoch.load(Ordering::SeqCst) != epoch {
+                pending.clear();
+                last_emit = Instant::now();
+                continue;
+            }
+
+            for event in pending.drain(..) {
+                let Some(kind_str) = event_kind_str(&event.kind) else {
+                    continue;
+                };
+                for path in &event.paths {
+                    if *path != file_path {
+                        continue;
+                    }
+                    if is_self_write(&state, path) {
+                        continue;
+                    }
+                    wlog!(
+                        "emit fs:file-changed (standalone) kind={kind_str} {}",
+                        path.display()
+                    );
+                    let _ = handle.emit_to(
+                        label.clone(),
+                        "fs:file-changed",
+                        &FileChangeEvent {
+                            path: path.to_string_lossy().to_string(),
+                            kind: kind_str.to_string(),
+                        },
+                    );
+                }
+            }
+
+            last_emit = Instant::now();
+        }
+    });
+
+    Ok(watcher)
+}
+
 /// Rebuild the workspace gitignore matcher on a one-shot background thread,
 /// then swap it in and nudge the sidebar to re-read. Keeps the watcher's
 /// event loop free while the tree walk runs.

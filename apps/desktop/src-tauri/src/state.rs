@@ -59,6 +59,11 @@ pub struct WorkspaceState {
     /// slot has been read. Drained by the frontend once startup hydration
     /// completes. Never read by `get_startup_state`.
     pub pending_open: Mutex<VecDeque<PendingOpenPayload>>,
+    /// The single file hosted by this window when it runs in standalone
+    /// compact mode (no workspace root). Used to dedupe repeat opens of the
+    /// same file onto the existing window and as the target of the
+    /// single-file watcher.
+    pub standalone_file: RwLock<Option<PathBuf>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -86,6 +91,7 @@ impl Default for WorkspaceState {
             startup_open: Mutex::new(None),
             startup_open_taken: AtomicBool::new(false),
             pending_open: Mutex::new(VecDeque::new()),
+            standalone_file: RwLock::new(None),
         }
     }
 }
@@ -170,18 +176,30 @@ impl WorkspaceState {
     }
 
     pub fn has_pending_workspace(&self, path: &Path) -> bool {
-        let has_startup = self
-            .startup_open
-            .lock()
-            .as_ref()
-            .is_some_and(|p| Path::new(&p.workspace) == path);
-        if has_startup {
+        let matches = |payload: &PendingOpenPayload| {
+            payload
+                .workspace
+                .as_deref()
+                .is_some_and(|workspace| Path::new(workspace) == path)
+        };
+        if self.startup_open.lock().as_ref().is_some_and(matches) {
             return true;
         }
-        self.pending_open
-            .lock()
-            .iter()
-            .any(|payload| Path::new(&payload.workspace) == path)
+        self.pending_open.lock().iter().any(matches)
+    }
+
+    pub fn has_pending_file(&self, path: &Path) -> bool {
+        let matches = |payload: &PendingOpenPayload| {
+            payload.workspace.is_none()
+                && payload
+                    .file
+                    .as_deref()
+                    .is_some_and(|file| Path::new(file) == path)
+        };
+        if self.startup_open.lock().as_ref().is_some_and(matches) {
+            return true;
+        }
+        self.pending_open.lock().iter().any(matches)
     }
 }
 
@@ -195,6 +213,10 @@ pub struct AppState {
     /// two windows can't clobber each other's tab state under the 500 ms
     /// debounce. Held only for the load→save span.
     pub sessions_file_lock: Mutex<()>,
+    /// Serializes read-modify-write on the shared `recent_files.json` file
+    /// so concurrent recents updates from multiple windows don't drop each
+    /// other's entries. Held only for the load→save span.
+    pub recent_files_lock: Mutex<()>,
 }
 
 impl AppState {
@@ -202,6 +224,7 @@ impl AppState {
         Self {
             windows: RwLock::new(HashMap::new()),
             sessions_file_lock: Mutex::new(()),
+            recent_files_lock: Mutex::new(()),
         }
     }
 
@@ -255,6 +278,25 @@ impl AppState {
         None
     }
 
+    /// Find an existing standalone window already hosting (or about to
+    /// host) `path`. Mirrors `find_by_workspace` so repeat opens of the
+    /// same file focus the existing compact window instead of duplicating.
+    pub fn find_by_standalone_file(&self, path: &Path) -> Option<String> {
+        let map = self.windows.read();
+        for (label, state) in map.iter() {
+            let guard = state.standalone_file.read();
+            if guard.as_deref() == Some(path) {
+                return Some(label.clone());
+            }
+            drop(guard);
+
+            if state.has_pending_file(path) {
+                return Some(label.clone());
+            }
+        }
+        None
+    }
+
     /// Snapshot of all known window labels. Used by startup code to emit
     /// broadcast-style events without hard-coding labels.
     pub fn labels(&self) -> Vec<String> {
@@ -301,7 +343,7 @@ mod tests {
         let app_state = AppState::new();
         let window_state = app_state.get_or_create("startup-window");
         window_state.set_startup_open(PendingOpenPayload {
-            workspace: "/tmp/workspace".to_string(),
+            workspace: Some("/tmp/workspace".to_string()),
             file: None,
         });
 
@@ -316,7 +358,7 @@ mod tests {
         let app_state = AppState::new();
         let window_state = app_state.get_or_create("pending-window");
         window_state.push_pending_open(PendingOpenPayload {
-            workspace: "/tmp/workspace".to_string(),
+            workspace: Some("/tmp/workspace".to_string()),
             file: None,
         });
 
@@ -327,14 +369,57 @@ mod tests {
     }
 
     #[test]
+    fn find_by_standalone_file_matches_hosted_and_pending_files() {
+        let app_state = AppState::new();
+        let hosting = app_state.get_or_create("hosting-window");
+        *hosting.standalone_file.write() = Some(PathBuf::from("/tmp/hosted.md"));
+
+        let pending = app_state.get_or_create("pending-window");
+        pending.set_startup_open(PendingOpenPayload {
+            workspace: None,
+            file: Some("/tmp/pending.md".to_string()),
+        });
+
+        assert_eq!(
+            app_state.find_by_standalone_file(Path::new("/tmp/hosted.md")),
+            Some("hosting-window".to_string())
+        );
+        assert_eq!(
+            app_state.find_by_standalone_file(Path::new("/tmp/pending.md")),
+            Some("pending-window".to_string())
+        );
+        assert_eq!(
+            app_state.find_by_standalone_file(Path::new("/tmp/other.md")),
+            None
+        );
+    }
+
+    #[test]
+    fn workspace_plus_file_payload_does_not_match_standalone_lookup() {
+        // A file opened *into a workspace window* must not be claimed by the
+        // standalone dedupe — only file-only payloads host standalone files.
+        let app_state = AppState::new();
+        let state = app_state.get_or_create("workspace-window");
+        state.push_pending_open(PendingOpenPayload {
+            workspace: Some("/tmp/workspace".to_string()),
+            file: Some("/tmp/workspace/a.md".to_string()),
+        });
+
+        assert_eq!(
+            app_state.find_by_standalone_file(Path::new("/tmp/workspace/a.md")),
+            None
+        );
+    }
+
+    #[test]
     fn pending_open_preserves_distinct_payloads_in_order() {
         let window_state = WorkspaceState::default();
         let first = PendingOpenPayload {
-            workspace: "/tmp/workspace-a".to_string(),
+            workspace: Some("/tmp/workspace-a".to_string()),
             file: Some("/tmp/workspace-a/a.md".to_string()),
         };
         let second = PendingOpenPayload {
-            workspace: "/tmp/workspace-b".to_string(),
+            workspace: Some("/tmp/workspace-b".to_string()),
             file: Some("/tmp/workspace-b/b.md".to_string()),
         };
 
@@ -350,7 +435,7 @@ mod tests {
     fn pending_open_dedupes_repeated_tail_payload() {
         let window_state = WorkspaceState::default();
         let payload = PendingOpenPayload {
-            workspace: "/tmp/workspace".to_string(),
+            workspace: Some("/tmp/workspace".to_string()),
             file: Some("/tmp/workspace/a.md".to_string()),
         };
 
@@ -367,7 +452,7 @@ mod tests {
         assert_eq!(window_state.take_startup_open(), None);
 
         let payload = PendingOpenPayload {
-            workspace: "/tmp/workspace".to_string(),
+            workspace: Some("/tmp/workspace".to_string()),
             file: None,
         };
 
@@ -381,11 +466,11 @@ mod tests {
     fn startup_open_try_seed_preserves_existing_payload() {
         let window_state = WorkspaceState::default();
         let first = PendingOpenPayload {
-            workspace: "/tmp/workspace-a".to_string(),
+            workspace: Some("/tmp/workspace-a".to_string()),
             file: None,
         };
         let second = PendingOpenPayload {
-            workspace: "/tmp/workspace-b".to_string(),
+            workspace: Some("/tmp/workspace-b".to_string()),
             file: None,
         };
 

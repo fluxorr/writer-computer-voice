@@ -1,7 +1,10 @@
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { getWorkspaceChromeMode } from "@/lib/compact-mode";
 
 export function useWorkspace() {
   const root = useWorkspaceStore((s) => s.root);
+  const rawChromeMode = useWorkspaceStore((s) => s.chromeMode);
+  const chromeMode = getWorkspaceChromeMode(root, rawChromeMode);
   const isIndexing = useWorkspaceStore((s) => s.isIndexing);
   const openWorkspace = useWorkspaceStore((s) => s.openWorkspace);
   const closeWorkspace = useWorkspaceStore((s) => s.closeWorkspace);
@@ -9,12 +12,27 @@ export function useWorkspace() {
   const removeRecentWorkspace = useWorkspaceStore((s) => s.removeRecentWorkspace);
   return {
     root,
+    chromeMode,
     isIndexing,
     openWorkspace,
     closeWorkspace,
     recentWorkspaces,
     removeRecentWorkspace,
   };
+}
+
+export function useWorkspaceChromeMode() {
+  const root = useWorkspaceStore((s) => s.root);
+  const chromeMode = useWorkspaceStore((s) => s.chromeMode);
+  return getWorkspaceChromeMode(root, chromeMode);
+}
+
+export function useIsCompactFileMode() {
+  return useWorkspaceChromeMode() === "compact-file";
+}
+
+export function useSetWorkspaceChromeMode() {
+  return useWorkspaceStore((s) => s.setChromeMode);
 }
 
 export function useIsStartupResolved() {

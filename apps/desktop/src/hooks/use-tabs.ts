@@ -76,6 +76,10 @@ export function useOpenFile() {
   return useEditorStore((s) => s.openFile);
 }
 
+export function useOpenCompactFile() {
+  return useEditorStore((s) => s.openCompactFile);
+}
+
 export function useOpenNewTab() {
   return useEditorStore((s) => s.openNewTab);
 }

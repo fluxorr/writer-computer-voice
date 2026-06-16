@@ -3,6 +3,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { useEditorStore } from "@/stores/editor-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { toggleSidebar } from "@/hooks/use-sidebar";
+import { getWorkspaceChromeMode } from "@/lib/compact-mode";
 
 function isEditableTargetFocused(): boolean {
   const active = document.activeElement;
@@ -20,7 +21,7 @@ export function useKeyboardShortcuts() {
 
       // Read current state at event time
       const { openCommandPalette } = useUIStore.getState();
-      const { root } = useWorkspaceStore.getState();
+      const { root, chromeMode } = useWorkspaceStore.getState();
       const {
         tabs,
         activeTabId,
@@ -30,6 +31,7 @@ export function useKeyboardShortcuts() {
         navigateBack,
         navigateForward,
       } = useEditorStore.getState();
+      const isCompactFileMode = getWorkspaceChromeMode(root, chromeMode) === "compact-file";
 
       // Alt+Arrow: history navigation when no editable target is focused;
       // inside the editor, let CodeMirror handle word-wise cursor motion.
@@ -54,6 +56,7 @@ export function useKeyboardShortcuts() {
 
       // Cmd+W — close current tab
       if (mod && e.key === "w") {
+        if (isCompactFileMode) return;
         e.preventDefault();
         if (activeTabId) closeActiveTab();
         return;
@@ -62,6 +65,7 @@ export function useKeyboardShortcuts() {
       // Cmd+\ — toggle sidebar
       if (mod && e.key === "\\") {
         e.preventDefault();
+        if (isCompactFileMode) return;
         toggleSidebar();
         return;
       }
@@ -83,6 +87,7 @@ export function useKeyboardShortcuts() {
       // Cmd+T — new tab
       if (mod && e.key === "t") {
         e.preventDefault();
+        if (isCompactFileMode) return;
         if (root) openNewTab();
         return;
       }
@@ -90,6 +95,7 @@ export function useKeyboardShortcuts() {
       // Ctrl+Tab / Ctrl+Shift+Tab — cycle tabs
       if (e.ctrlKey && e.key === "Tab") {
         e.preventDefault();
+        if (isCompactFileMode) return;
         if (tabs.length === 0 || !activeTabId) return;
         const idx = tabs.findIndex((tab) => tab.id === activeTabId);
         if (idx === -1) return;
@@ -101,6 +107,7 @@ export function useKeyboardShortcuts() {
       // Cmd+1 through Cmd+9 — jump to Nth tab
       if (mod && e.key >= "1" && e.key <= "9") {
         e.preventDefault();
+        if (isCompactFileMode) return;
         const n = parseInt(e.key) - 1;
         if (n < tabs.length) {
           setActiveTab(tabs[n]!.id);

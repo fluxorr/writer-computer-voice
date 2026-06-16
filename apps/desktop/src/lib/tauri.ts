@@ -113,6 +113,41 @@ export function removeRecentWorkspace(path: string): Promise<void> {
   return invoke("remove_recent_workspace", { path });
 }
 
+/** Open a markdown file in a standalone compact window (no workspace). If a
+ *  standalone window already hosts the file, it is focused instead. */
+export function openFileInStandaloneWindow(path: string): Promise<void> {
+  return invoke("open_file_in_standalone_window", { path });
+}
+
+/** Point this window's watcher at a single standalone file (parent-dir,
+ *  non-recursive). Call whenever the standalone compact window switches
+ *  files. */
+export function watchStandaloneFile(path: string): Promise<void> {
+  return invoke("watch_standalone_file", { path });
+}
+
+// Global recents (persisted across workspaces in the app data dir)
+/** A recently-opened file with its last-opened time. `opened_at` is unix
+ *  seconds; `0` marks a legacy entry whose open time is unknown. */
+export interface RecentFile {
+  path: string;
+  name: string;
+  title: string | null;
+  opened_at: number;
+}
+
+export function recordRecentFile(path: string): Promise<void> {
+  return invoke("record_recent_file", { path });
+}
+
+export function removeRecentFile(path: string): Promise<void> {
+  return invoke("remove_recent_file", { path });
+}
+
+export function getRecentFilesGlobal(limit?: number): Promise<RecentFile[]> {
+  return invoke("get_recent_files_global", { limit: limit ?? null });
+}
+
 // Session commands
 export interface SessionData {
   tabs?: SessionTabData[];
@@ -172,9 +207,11 @@ export function resetSetting(key: string, scope: "global" | "workspace" = "globa
   return invoke("reset_setting", { key, scope });
 }
 
-// Pending open queue (drag-drop / CLI arg / dock open)
+// Pending open queue (drag-drop / CLI arg / dock open). A folder open
+// carries `workspace`; a markdown-file open carries only `file` and opens
+// standalone (compact window, no workspace).
 export interface PendingOpenPayload {
-  workspace: string;
+  workspace: string | null;
   file: string | null;
 }
 
@@ -191,6 +228,10 @@ export interface StartupState {
   settings: Record<string, unknown>;
   recent_workspaces: string[];
   restore_bundle: RestoreWorkspaceResponse | null;
+  /** Standalone compact-mode open (CLI arg / drag-drop of a markdown file).
+   *  Mutually exclusive with `restore_bundle`; the single-file watcher is
+   *  already running by the time this returns. */
+  standalone_file: FileContent | null;
 }
 
 export function getStartupState(): Promise<StartupState> {

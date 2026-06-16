@@ -38,6 +38,8 @@ import type { DirEntry } from "@/types/fs";
 
 interface FileTreeProps {
   rootPath: string;
+  openFile?: (path: string) => Promise<void>;
+  enableContextMenus?: boolean;
 }
 
 function getExtension(name: string): string {
@@ -62,11 +64,16 @@ async function resolveUniqueName(
   throw new Error(`Could not find an available name for "${baseName}" in ${parentPath}`);
 }
 
-export function FileTree({ rootPath }: FileTreeProps) {
+export function FileTree({
+  rootPath,
+  openFile: openFileOverride,
+  enableContextMenus = true,
+}: FileTreeProps) {
   const directoryCache = useDirectoryCache();
   const expandedDirs = useExpandedDirs();
   const toggleDirectory = useToggleDirectory();
-  const openFile = useOpenFile();
+  const defaultOpenFile = useOpenFile();
+  const openFile = openFileOverride ?? defaultOpenFile;
   const refreshDirectory = useRefreshDirectory();
   const invalidatePath = useInvalidatePath();
   const rewriteExpandedDir = useRewriteExpandedDir();
@@ -457,6 +464,8 @@ export function FileTree({ rootPath }: FileTreeProps) {
 
   const handleContextMenu = useCallback(
     (_event: MouseEvent<HTMLElement>, entry: DirEntry) => {
+      if (!enableContextMenus) return;
+
       // If multiple items are selected and the right-clicked item is in the selection,
       // show the bulk menu
       if (selectedPaths.size >= 2 && selectedPaths.has(entry.path)) {
@@ -474,7 +483,13 @@ export function FileTree({ rootPath }: FileTreeProps) {
         handleFileContextMenu(entry);
       }
     },
-    [handleBulkContextMenu, handleFileContextMenu, handleFolderContextMenu, selectedPaths],
+    [
+      enableContextMenus,
+      handleBulkContextMenu,
+      handleFileContextMenu,
+      handleFolderContextMenu,
+      selectedPaths,
+    ],
   );
 
   if (flatItems.length === 0) {
@@ -494,7 +509,7 @@ export function FileTree({ rootPath }: FileTreeProps) {
           onToggleDir={toggleDirectory}
           onOpenFile={openFile}
           onClick={handleSelectionClick}
-          onContextMenu={handleContextMenu}
+          onContextMenu={enableContextMenus ? handleContextMenu : undefined}
           onRenameSubmit={handleRenameSubmit}
           onRenameCancel={handleRenameCancel}
           fileLabelMode={fileLabelMode}

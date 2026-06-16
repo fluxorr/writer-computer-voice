@@ -239,6 +239,109 @@ input {
   pointer-events: none;
 }
 
+.compact-picker-shell {
+  --compact-picker-duration: 260ms;
+  --compact-picker-easing: cubic-bezier(0.32, 0, 0.2, 1);
+  --compact-picker-trigger-bg-tint: color-mix(
+    in srgb,
+    var(--fg-base) calc(var(--contrast) * 22%),
+    transparent
+  );
+  --compact-picker-trigger-bg-opacity: 0;
+  --compact-picker-trigger-bg-closed-opacity: 0.05;
+  --compact-picker-trigger-bg-delay: 0ms;
+  isolation: isolate;
+  overflow: visible;
+  transition: opacity var(--compact-picker-duration) var(--compact-picker-easing);
+}
+
+.compact-picker-card-frame {
+  border-radius: var(--compact-picker-frame-radius-x) / var(--compact-picker-frame-radius-y);
+  contain: paint;
+  isolation: isolate;
+  overflow: hidden;
+  transform-origin: top left;
+  will-change: border-radius, transform;
+}
+
+.compact-picker-card-shadow {
+  border-radius: var(--compact-picker-frame-radius-x) / var(--compact-picker-frame-radius-y);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: top left;
+  transition: opacity var(--compact-picker-duration) var(--compact-picker-easing);
+  will-change: opacity, transform, border-radius;
+}
+
+[data-theme="light"] .compact-picker-shell[data-state="open"] .compact-picker-card-shadow {
+  opacity: 1;
+}
+
+.compact-picker-card-surface {
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--bg-base) 55%, transparent),
+      color-mix(in srgb, var(--bg-base) 55%, transparent)
+    ),
+    var(--surface-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.compact-picker-card-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--compact-picker-trigger-bg-tint);
+  opacity: var(--compact-picker-trigger-bg-opacity);
+  pointer-events: none;
+  transition: opacity var(--compact-picker-duration) var(--compact-picker-easing)
+    var(--compact-picker-trigger-bg-delay);
+  will-change: opacity;
+}
+
+[data-theme="dark"] .compact-picker-shell {
+  --compact-picker-trigger-bg-tint: white;
+}
+
+[data-theme="light"] .compact-picker-shell {
+  --compact-picker-trigger-bg-tint: color-mix(in srgb, var(--fg-base) 60%, transparent);
+}
+
+.compact-picker-card-border {
+  border-color: var(--compact-picker-border-color);
+  border-radius: inherit;
+  border-style: solid;
+  border-width: var(--compact-picker-border-y-width) var(--compact-picker-border-x-width)
+    var(--compact-picker-border-y-width) var(--compact-picker-border-x-width);
+  box-sizing: border-box;
+  pointer-events: none;
+  transition: border-color 100ms ease-out;
+}
+
+.compact-picker-content-scale {
+  transform: scale(var(--compact-picker-content-scale-x), var(--compact-picker-content-scale-y));
+  transform-origin: top center;
+  will-change: transform;
+}
+
+.compact-picker-content {
+  opacity: 0;
+  transform: translate3d(0, -30px, 0);
+  transition:
+    opacity var(--compact-picker-duration) var(--compact-picker-easing),
+    transform var(--compact-picker-duration) var(--compact-picker-easing);
+  will-change: opacity, transform;
+}
+
+.compact-picker-content-open {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transition-delay: 45ms;
+}
+
 /* CodeMirror autocomplete tooltip (wiki-link suggestions). Mirrors the
    surface-card chrome but can't share the rule directly because
    `--surface-card` is set to `transparent` in light mode (so settings-panel

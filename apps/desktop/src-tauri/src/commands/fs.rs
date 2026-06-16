@@ -304,7 +304,7 @@ pub async fn write_file(
     Ok(result)
 }
 
-fn markdown_file_entry(path: &Path) -> Option<DirEntry> {
+pub(crate) fn markdown_file_entry(path: &Path) -> Option<DirEntry> {
     if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("md") {
         return None;
     }

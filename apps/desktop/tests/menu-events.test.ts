@@ -15,9 +15,11 @@ vi.mock("@/lib/theme", () => ({
 
 import { MENU_EVENT_HANDLERS } from "../src/hooks/use-menu-events";
 import { useEditorStore } from "../src/stores/editor-store";
+import { useWorkspaceStore } from "../src/stores/workspace-store";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useWorkspaceStore.setState({ chromeMode: "workspace" });
   useEditorStore.setState({
     openFiles: new Map(),
     tabs: [],
@@ -52,5 +54,13 @@ describe("menu-events", () => {
       .tabs.filter((tab) => tab.location.kind === "settings");
     expect(settingsTabs).toHaveLength(1);
     expect(secondId).toBe(firstId);
+  });
+
+  test("menu:open-preferences is ignored in compact file mode", () => {
+    useWorkspaceStore.setState({ chromeMode: "compact-file" });
+
+    MENU_EVENT_HANDLERS["menu:open-preferences"]!();
+
+    expect(useEditorStore.getState().tabs).toEqual([]);
   });
 });

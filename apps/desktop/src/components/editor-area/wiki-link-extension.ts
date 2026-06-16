@@ -199,25 +199,38 @@ async function wikiLinkCompletions(context: CompletionContext): Promise<Completi
 // Click handling
 // ---------------------------------------------------------------------------
 
+/** Resolve the wiki-link target under a mouse event, or null if it isn't a
+ *  wiki link. Shared by the mousedown (claim the press) and click (navigate)
+ *  handlers. */
+function wikiTargetAt(event: MouseEvent, view: EditorView): string | null {
+  const target = event.target;
+  if (!(target instanceof Element)) return null;
+  const wikiLink = target.closest(".cm-wiki-link");
+  if (!wikiLink) return null;
+
+  if (wikiLink instanceof HTMLElement && wikiLink.dataset.wikiTarget) {
+    return wikiLink.dataset.wikiTarget;
+  }
+  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+  if (pos === null) return null;
+  return extractWikiTarget(view.state.doc, pos);
+}
+
 function wikiLinkClickHandler(getFilePath: () => string, isDisposed: () => boolean): Extension {
   return Prec.highest(
     EditorView.domEventHandlers({
+      // Claim the press on mousedown so CodeMirror doesn't move the caret
+      // into the link (which would unfold the rendered widget), but defer
+      // navigation to the click (mouseup) so it follows on release.
       mousedown(event, view) {
-        const target = event.target;
-        if (!(target instanceof Element)) return false;
-        const wikiLink = target.closest(".cm-wiki-link");
-        if (!wikiLink) return false;
-
-        let rawTarget =
-          wikiLink instanceof HTMLElement && wikiLink.dataset.wikiTarget
-            ? wikiLink.dataset.wikiTarget
-            : null;
-        if (!rawTarget) {
-          const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-          if (pos === null) return false;
-          rawTarget = extractWikiTarget(view.state.doc, pos);
-        }
-        if (!rawTarget) return false;
+        if (wikiTargetAt(event, view) === null) return false;
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+      },
+      click(event, view) {
+        const rawTarget = wikiTargetAt(event, view);
+        if (rawTarget === null) return false;
 
         event.preventDefault();
         event.stopPropagation();

@@ -6,6 +6,19 @@
 
 ## Done
 
+- Compact picker recents polish — add a plain non-hovering Recents label using sidebar section styling, remove the search field, per-row opened time, Open other file row, and active file entry, then keep the row remove affordance small so the picker is a direct global recents list.
+- Global-scoped compact mode: [`SPECs/global-compact-mode-spec.md`](SPECs/global-compact-mode-spec.md) — compact windows are fully workspace-free (no root, no indexing, parent-dir single-file watcher), the picker shows a persisted global recent-files list, and the workspace-scoped compact setting is replaced by an "Open File in Compact Window" command.
+- Compact picker trigger hit area — scope the closed trigger surface hover/focus state to the pill instead of the full picker-width wrapper.
+- Compact picker trigger close hold — keep the closed trigger surface visible for 300ms after the picker close morph, then fade it with the picker opacity curve.
+- Compact picker shadow fade — move the light-mode popover shadow to an opacity-animated layer so it fades out on close.
+- Compact picker light trigger fill — make the light-mode compact trigger use a subtle gray tint instead of a near-white fill.
+- Compact picker light shadow — add a subtle floating-card-style shadow to the compact picker popover in light mode.
+- Compact picker timing — slow the picker morph and related content fades to 260ms while keeping the previous easing curve.
+- Compact picker height cap — raise the compact navigator popover max height to 420px while keeping content-sized wrapping below the cap.
+- Compact picker center anchoring — counter-scale the picker content from the horizontal center so the navigator stays centered while the popover expands.
+- Compact footer polish — hide the document stats footer in compact chrome while leaving the normal workspace footer unchanged.
+- Compact mode setting: [`SPECs/compact-mode-setting-spec.md`](SPECs/compact-mode-setting-spec.md) — make compact chrome a persisted appearance setting with a command-palette toggle, while removing the debug-only compact launch environment variable.
+- Compact single-file window: [`SPECs/compact-window-spec.md`](SPECs/compact-window-spec.md) — use compact chrome for explicit single-file opens with no sidebar, no sidebar toggle, no tab strip, and a top dropdown that reuses Pinned, Recents, and Everything navigation.
 - Website TanStack Start refactor: [`SPECs/website-tanstack-start-refactor-spec.md`](SPECs/website-tanstack-start-refactor-spec.md) — move the marketing website from a plain Vite SPA to TanStack Start routing/document/build structure while preserving the static Cloudflare deployment path.
 - Floating card shadow polish — add a large subtle shadow to the shared command-palette/popover card surface.
 - Sidebar sections redesign: [`SPECs/sidebar-sections-spec.md`](SPECs/sidebar-sections-spec.md) — split the sidebar into collapsible Pinned, Recents, and Everything sections; keep the existing file tree under Everything; add per-workspace pinned files and compact metadata-backed recent files with Show More pagination.

@@ -85,6 +85,7 @@ fn prepare_workspace_state(
 
     // Reset per-workspace state.
     *state.workspace_root.write() = Some(root.clone());
+    *state.standalone_file.write() = None;
     *state.file_index.write() = Vec::new();
     state.invalidate_recent_files_cache();
     *state.dirs_with_markdown.write() = Default::default();
@@ -403,6 +404,57 @@ pub fn open_workspace_in_new_window(
     }
 
     crate::open_new_workspace_window(&app, path, file)
+}
+
+/// Open a single markdown file in a standalone compact window (no
+/// workspace). Focuses the existing window when one already hosts the file.
+#[tauri::command]
+pub fn open_file_in_standalone_window(path: String, app: tauri::AppHandle) -> Result<(), AppError> {
+    crate::open_standalone_file_window(&app, path)
+}
+
+/// Point this window's watcher at a single standalone file. Bumps the
+/// workspace epoch so any previous watcher (workspace or file) goes stale,
+/// drops it off-thread, and installs the lightweight parent-dir watcher.
+/// Shared by the standalone startup path and the compact picker's file
+/// switches.
+pub(crate) fn watch_standalone_file_impl(
+    app: &tauri::AppHandle,
+    label: &str,
+    path: &str,
+) -> Result<(), AppError> {
+    let raw = PathBuf::from(path);
+    if !raw.is_file() {
+        return Err(AppError::NotFound(path.to_string()));
+    }
+    let file = raw
+        .canonicalize()
+        .map_err(|e| AppError::Io(e.to_string()))?;
+
+    let state = app.state::<AppState>().get_or_create(label);
+    let epoch = state.workspace_epoch.fetch_add(1, Ordering::SeqCst) + 1;
+    *state.standalone_file.write() = Some(file.clone());
+
+    let old_watcher = state.watcher_handle.write().take();
+    drop_watcher_off_thread(old_watcher);
+
+    let watcher = crate::watcher::start_file_watcher(app.clone(), label.to_string(), &file, epoch)
+        .map_err(|e| AppError::Io(e.to_string()))?;
+
+    let mut guard = state.watcher_handle.write();
+    if epoch_is_current(&state, epoch) {
+        *guard = Some(watcher);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn watch_standalone_file(
+    path: String,
+    webview: tauri::Webview,
+    app: tauri::AppHandle,
+) -> Result<(), AppError> {
+    watch_standalone_file_impl(&app, webview.label(), &path)
 }
 
 // --- Session persistence (stored in app data dir) ---

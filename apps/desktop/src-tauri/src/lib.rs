@@ -16,7 +16,7 @@ use error::AppError;
 use open_target::resolve_path;
 pub use open_target::PendingOpenPayload;
 use state::AppState;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
 use tauri::menu::MenuItem;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
@@ -98,6 +98,14 @@ pub(crate) fn open_new_workspace_window(
     if let Some(existing_label) = app.state::<AppState>().find_by_workspace(&workspace) {
         if let Some(window) = app.get_webview_window(&existing_label) {
             let _ = window.set_focus();
+            queue_open_event(
+                app,
+                &existing_label,
+                PendingOpenPayload {
+                    workspace: Some(workspace_str),
+                    file,
+                },
+            );
             return Ok(());
         }
     }
@@ -106,10 +114,53 @@ pub(crate) fn open_new_workspace_window(
     let state = app.state::<AppState>().get_or_create(&label);
     init_window_settings(app, &state);
     state.set_startup_open(PendingOpenPayload {
-        workspace: workspace_str,
+        workspace: Some(workspace_str),
         file,
     });
 
+    build_secondary_window(app, label)
+}
+
+/// Open a new standalone compact window for a single markdown file — no
+/// workspace, no indexing. If a standalone window already hosts this file,
+/// focus it instead of duplicating.
+pub(crate) fn open_standalone_file_window(
+    app: &tauri::AppHandle,
+    file_path: String,
+) -> Result<(), AppError> {
+    let raw = PathBuf::from(&file_path);
+    if !raw.is_file() {
+        return Err(AppError::NotFound(file_path));
+    }
+
+    // Canonicalize so lookup, pending-open dedupe, and the watcher's path
+    // equality all agree (`/var` vs. `/private/var` aliasing).
+    let file = raw
+        .canonicalize()
+        .map_err(|e| AppError::Io(e.to_string()))?;
+
+    if let Some(existing_label) = app.state::<AppState>().find_by_standalone_file(&file) {
+        if let Some(window) = app.get_webview_window(&existing_label) {
+            let _ = window.set_focus();
+            return Ok(());
+        }
+    }
+
+    let label = format!("w-{}", uuid::Uuid::new_v4().simple());
+    let state = app.state::<AppState>().get_or_create(&label);
+    init_window_settings(app, &state);
+    state.set_startup_open(PendingOpenPayload {
+        workspace: None,
+        file: Some(file.to_string_lossy().to_string()),
+    });
+
+    build_secondary_window(app, label)
+}
+
+/// Build a secondary `WebviewWindow` whose `WorkspaceState` has already been
+/// seeded with a startup-open payload. Shared by workspace and standalone
+/// window creation.
+fn build_secondary_window(app: &tauri::AppHandle, label: String) -> Result<(), AppError> {
     // Clone the main window's config (titlebar overlay, traffic-light
     // position, transparency, hudWindow vibrancy, `visible: false`) so
     // secondary windows look and animate identically. Rewrite the label,
@@ -345,9 +396,14 @@ fn handle_single_instance(app: &tauri::AppHandle, argv: Vec<String>) {
     let path_arg = argv.into_iter().nth(1);
     match path_arg.and_then(|arg| resolve_path(&PathBuf::from(arg))) {
         Some(payload) => {
-            if let Err(err) =
-                open_new_workspace_window(app, payload.workspace.clone(), payload.file.clone())
-            {
+            let result = match (&payload.workspace, &payload.file) {
+                (Some(workspace), file) => {
+                    open_new_workspace_window(app, workspace.clone(), file.clone())
+                }
+                (None, Some(file)) => open_standalone_file_window(app, file.clone()),
+                (None, None) => Ok(()),
+            };
+            if let Err(err) = result {
                 eprintln!("failed to open new window from single-instance argv: {err:?}");
             }
         }
@@ -456,6 +512,11 @@ pub fn run() {
             commands::workspace::take_pending_open,
             commands::workspace::save_session,
             commands::workspace::load_session,
+            commands::workspace::open_file_in_standalone_window,
+            commands::workspace::watch_standalone_file,
+            commands::recents::record_recent_file,
+            commands::recents::remove_recent_file,
+            commands::recents::get_recent_files_global,
             commands::search::index_workspace,
             commands::search::fuzzy_search,
             commands::images::save_clipboard_image,
@@ -483,11 +544,24 @@ pub fn run() {
                     if let Ok(path) = url.to_file_path() {
                         if let Some(payload) = resolve_path(&path) {
                             let app_state = _app.state::<AppState>();
-                            let existing =
-                                app_state.find_by_workspace(&PathBuf::from(&payload.workspace));
+                            let existing = match (&payload.workspace, &payload.file) {
+                                (Some(workspace), _) => {
+                                    app_state.find_by_workspace(Path::new(workspace))
+                                }
+                                (None, Some(file)) => {
+                                    app_state.find_by_standalone_file(Path::new(file))
+                                }
+                                (None, None) => None,
+                            };
                             match existing {
                                 Some(label) => {
-                                    queue_open_event(_app, &label, payload);
+                                    if payload.workspace.is_some() {
+                                        queue_open_event(_app, &label, payload);
+                                    } else if let Some(window) = _app.get_webview_window(&label) {
+                                        // Standalone window already hosts this
+                                        // exact file — just bring it forward.
+                                        let _ = window.set_focus();
+                                    }
                                 }
                                 None => {
                                     let main_state = app_state.get_or_create(MAIN_WINDOW_LABEL);
@@ -503,14 +577,25 @@ pub fn run() {
                                             if main_visible {
                                                 // Warm start: the app is already
                                                 // running with its main window
-                                                // visible. Open the workspace in a
-                                                // new window so the user's current
-                                                // editor state is preserved.
-                                                let _ = open_new_workspace_window(
-                                                    _app,
-                                                    payload.workspace.clone(),
-                                                    payload.file.clone(),
-                                                );
+                                                // visible. Open in a new window so
+                                                // the user's current editor state
+                                                // is preserved.
+                                                let _ = match (&payload.workspace, &payload.file) {
+                                                    (Some(workspace), file) => {
+                                                        open_new_workspace_window(
+                                                            _app,
+                                                            workspace.clone(),
+                                                            file.clone(),
+                                                        )
+                                                    }
+                                                    (None, Some(file)) => {
+                                                        open_standalone_file_window(
+                                                            _app,
+                                                            file.clone(),
+                                                        )
+                                                    }
+                                                    (None, None) => Ok(()),
+                                                };
                                             } else {
                                                 // Startup state has already been
                                                 // read, but the hidden main window

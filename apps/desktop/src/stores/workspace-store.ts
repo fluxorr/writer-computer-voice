@@ -6,8 +6,11 @@ import { getPreference, setPreference } from "@/lib/preferences";
 import { saveSession, loadSession } from "@/lib/session";
 import { getEditorSessionSnapshot, useEditorStore } from "@/stores/editor-store";
 
+export type WorkspaceChromeMode = "workspace" | "compact-file";
+
 interface WorkspaceState {
   root: string | null;
+  chromeMode: WorkspaceChromeMode;
   fileCount: number;
   isIndexing: boolean;
   isStartupResolved: boolean;
@@ -22,6 +25,7 @@ interface WorkspaceState {
    *  and user-initiated switches via the `restore_workspace` IPC). */
   restoreFromBundle: (bundle: RestoreWorkspaceResponse) => Promise<void>;
   closeWorkspace: () => void;
+  setChromeMode: (mode: WorkspaceChromeMode) => void;
   setStartupResolved: () => void;
   refreshDirectory: (path: string) => Promise<void>;
   toggleDirectory: (path: string) => Promise<void>;
@@ -74,6 +78,7 @@ function dedupe(paths: string[]) {
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   root: null,
+  chromeMode: "workspace",
   fileCount: 0,
   isIndexing: false,
   isStartupResolved: false,
@@ -114,6 +119,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const recents = await tauri.getRecentWorkspaces();
     set({
       root: info.root,
+      chromeMode: "workspace",
       fileCount: info.file_count,
       isIndexing: true,
       directoryCache: new Map([[info.root, entries]]),
@@ -146,6 +152,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     });
     set({
       root: null,
+      chromeMode: "workspace",
       fileCount: 0,
       directoryCache: new Map(),
       expandedDirs: new Set(),
@@ -166,6 +173,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
     set({
       root: bundle.workspace.root,
+      chromeMode: "workspace",
       fileCount: bundle.workspace.file_count,
       isIndexing: true,
       directoryCache: new Map([[bundle.workspace.root, bundle.entries]]),
@@ -196,12 +204,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
 
     if (bundle.open_file) {
+      // Workspace+file open (open_workspace_in_new_window with a file):
+      // the requested file becomes a normal tab in workspace chrome.
       void useEditorStore.getState().openFile(bundle.open_file);
       return;
     }
 
     useEditorStore.getState().ensureLauncherTab();
   },
+
+  setChromeMode: (mode) => set({ chromeMode: mode }),
 
   setStartupResolved: () => set({ isStartupResolved: true }),
 
@@ -380,6 +392,8 @@ if (typeof window !== "undefined") {
     if (state.tabs === prev.tabs && state.activeTabId === prev.activeTabId) return;
     if (sessionSaveTimer) clearTimeout(sessionSaveTimer);
     sessionSaveTimer = setTimeout(() => {
+      // Standalone compact windows have no root, so they never persist a
+      // session — the root check covers both cases.
       const root = useWorkspaceStore.getState().root;
       if (!root) return;
       const snapshot = getEditorSessionSnapshot(useEditorStore.getState());

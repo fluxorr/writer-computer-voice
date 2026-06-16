@@ -231,14 +231,15 @@ fn run_open<L: Launcher>(path: Option<PathBuf>, cwd: &Path, launcher: &L) -> Exi
 }
 
 /// Pick the single path the app should receive. A markdown target hands
-/// back the file (so the app opens both the workspace and the file),
-/// while a directory target hands back the workspace.
+/// back the file (opened standalone by the app), while a directory target
+/// hands back the workspace.
 fn canonical_target(payload: &PendingOpenPayload) -> PathBuf {
     payload
         .file
         .as_deref()
+        .or(payload.workspace.as_deref())
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(&payload.workspace))
+        .expect("classify always sets exactly one of file or workspace")
 }
 
 fn fail_usage(err: ParseError) {

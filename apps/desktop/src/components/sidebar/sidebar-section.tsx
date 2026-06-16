@@ -5,6 +5,9 @@ interface SidebarSectionProps {
   children: ReactNode;
 }
 
+export const SIDEBAR_SECTION_LABEL_CLASS =
+  "group flex h-5 items-center gap-1 pl-3 pr-2 text-left text-[12px] font-medium tracking-normal text-[var(--text-muted)] opacity-60";
+
 export function SidebarSection({ title, children }: SidebarSectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -14,7 +17,7 @@ export function SidebarSection({ title, children }: SidebarSectionProps) {
         type="button"
         aria-expanded={!isCollapsed}
         onClick={() => setIsCollapsed((collapsed) => !collapsed)}
-        className="group flex h-5 items-center gap-1 pl-3 pr-2 text-left text-[12px] font-medium tracking-normal text-[var(--text-muted)] opacity-60 hover:opacity-100"
+        className={`${SIDEBAR_SECTION_LABEL_CLASS} hover:opacity-100`}
       >
         <span>{title}</span>
         <span

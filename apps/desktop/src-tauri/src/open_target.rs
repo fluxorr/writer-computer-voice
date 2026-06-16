@@ -18,9 +18,13 @@ use std::path::{Path, PathBuf};
 
 /// Payload emitted to the frontend when a folder or file is opened via
 /// drag-drop, CLI arguments, or the single-instance plugin.
+///
+/// Exactly one shape per source: a folder open carries `workspace` with no
+/// `file`; a markdown-file open carries `file` with no `workspace` — single
+/// files open standalone (compact window) and never imply a workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PendingOpenPayload {
-    pub workspace: String,
+    pub workspace: Option<String>,
     pub file: Option<String>,
 }
 
@@ -68,21 +72,15 @@ fn classify(path: &Path) -> Result<PendingOpenPayload, OpenTargetError> {
     if metadata.is_dir() {
         let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         return Ok(PendingOpenPayload {
-            workspace: canonical.to_string_lossy().to_string(),
+            workspace: Some(canonical.to_string_lossy().to_string()),
             file: None,
         });
     }
 
     if metadata.is_file() && is_markdown(path) {
-        let parent = path
-            .parent()
-            .ok_or_else(|| OpenTargetError::Unsupported(path.to_path_buf()))?;
-        let canonical_parent = parent
-            .canonicalize()
-            .unwrap_or_else(|_| parent.to_path_buf());
         let canonical_file = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         return Ok(PendingOpenPayload {
-            workspace: canonical_parent.to_string_lossy().to_string(),
+            workspace: None,
             file: Some(canonical_file.to_string_lossy().to_string()),
         });
     }
@@ -107,21 +105,21 @@ mod tests {
         let payload = validate_and_resolve(dir.path()).unwrap();
         assert!(payload.file.is_none());
         assert_eq!(
-            payload.workspace,
+            payload.workspace.unwrap(),
             dir.path().canonicalize().unwrap().to_string_lossy()
         );
     }
 
     #[test]
-    fn markdown_file_resolves_to_workspace_plus_file() {
+    fn markdown_file_resolves_to_standalone_file_payload() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("note.md");
         fs::write(&file, "hello").unwrap();
 
         let payload = validate_and_resolve(&file).unwrap();
-        assert_eq!(
-            payload.workspace,
-            dir.path().canonicalize().unwrap().to_string_lossy()
+        assert!(
+            payload.workspace.is_none(),
+            "single-file opens must not imply a workspace"
         );
         assert_eq!(
             payload.file.unwrap(),

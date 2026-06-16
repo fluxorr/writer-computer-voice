@@ -57,6 +57,7 @@ interface EditorState {
   activeFilePath: string | null;
 
   openFile: (path: string) => Promise<void>;
+  openCompactFile: (path: string, prefetched?: FileContent | null) => Promise<void>;
   openFileInNewTab: (path: string) => Promise<void>;
   openNewTab: () => void;
   ensureLauncherTab: () => void;
@@ -350,6 +351,68 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       activeTabId: nextTab.id,
       activeFilePath: path,
     }));
+
+    try {
+      await loadPromise;
+    } catch {
+      get().closeTab(nextTab.id);
+    }
+  },
+
+  openCompactFile: async (path: string, prefetched: FileContent | null = null) => {
+    // Seed the prefetched content (standalone startup hands the file over
+    // in the startup IPC) so the editor mounts loaded; `ensureFileLoaded`
+    // then short-circuits on the non-loading entry.
+    if (prefetched && prefetched.path === path) {
+      const parsed = parseDocument(prefetched.content);
+      set((state) => {
+        const files = new Map(state.openFiles);
+        files.set(
+          path,
+          withDerived({
+            ...createLoadingFile(path),
+            frontmatter: parsed.frontmatter,
+            content: parsed.body ?? "",
+            title: parsed.title,
+            titleSource: parsed.titleSource,
+            diskContent: prefetched.content,
+            isLoading: false,
+          }),
+        );
+        return { openFiles: files };
+      });
+    }
+
+    const previousTabIds = get().tabs.map((tab) => tab.id);
+    const loadPromise = ensureFileLoaded(path, set as EditorStateSetter, get);
+    loadPromise.catch(() => {});
+
+    const nextTab = createFileTab(path);
+    set((state) => {
+      const candidatePaths = [
+        ...new Set(state.tabs.flatMap((tab) => tabPaths(tab)).filter((p) => p !== path)),
+      ];
+      const filesWithTarget = state.openFiles.has(path)
+        ? null
+        : new Map(state.openFiles).set(path, createLoadingFile(path));
+      const baseState = filesWithTarget ? { ...state, openFiles: filesWithTarget } : state;
+      const tabs = [nextTab];
+      const prunedFiles = maybePruneFiles(baseState, tabs, candidatePaths);
+      return {
+        tabs,
+        activeTabId: nextTab.id,
+        activeFilePath: path,
+        ...(prunedFiles
+          ? { openFiles: prunedFiles }
+          : filesWithTarget
+            ? { openFiles: filesWithTarget }
+            : {}),
+      };
+    });
+
+    for (const tabId of previousTabIds) {
+      pendingNavigationVersionByTabId.delete(tabId);
+    }
 
     try {
       await loadPromise;
