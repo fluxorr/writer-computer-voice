@@ -22,7 +22,7 @@ use tauri::menu::MenuItem;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 #[cfg(target_os = "macos")]
 use tauri::RunEvent;
-use tauri::{DragDropEvent, Emitter, Manager, WebviewWindow, WindowEvent};
+use tauri::{DragDropEvent, Emitter, Manager, PhysicalPosition, WebviewWindow, WindowEvent};
 
 #[cfg(target_os = "macos")]
 const CLI_MENU_INSTALL_LABEL: &str = "Install 'writer' Command Line Tool…";
@@ -202,8 +202,52 @@ fn build_secondary_window(app: &tauri::AppHandle, label: String) -> Result<(), A
     };
 
     attach_window_handlers(app, &window);
+    position_new_window(app, &window);
 
     Ok(())
+}
+
+/// Place a freshly built secondary window at a random on-screen position so
+/// multiple open windows don't stack on top of each other — scattering them
+/// makes it obvious that more than one window is open. Each window gets a
+/// random `(x, y)` inside the target monitor's work area (the screen minus the
+/// menu bar / dock), clamped so the whole window stays visible. Runs while the
+/// window is still `visible: false`, so there's no visible jump when it's shown.
+///
+/// Fail-soft: any missing monitor info or platform error leaves the window at
+/// its OS-default position — a positioning hiccup must never stop a window from
+/// opening.
+fn position_new_window(app: &tauri::AppHandle, window: &WebviewWindow) {
+    // Prefer the monitor under the cursor (where the user is working), then the
+    // window's own monitor, then the primary monitor.
+    let monitor = app
+        .cursor_position()
+        .ok()
+        .and_then(|p| app.monitor_from_point(p.x, p.y).ok().flatten())
+        .or_else(|| window.current_monitor().ok().flatten())
+        .or_else(|| window.primary_monitor().ok().flatten());
+    let Some(monitor) = monitor else { return };
+    let Ok(win_size) = window.outer_size() else {
+        return;
+    };
+
+    let area = monitor.work_area();
+    // Span of valid top-left positions that keep the whole window inside the
+    // work area. `saturating_sub` guards a window larger than the work area
+    // (span collapses to 0 → pinned to the work-area origin).
+    let span_x = area.size.width.saturating_sub(win_size.width) as f64;
+    let span_y = area.size.height.saturating_sub(win_size.height) as f64;
+
+    // Two random fractions in [0, 1] from a fresh v4 UUID's bytes — `uuid` is
+    // already a dependency, so no extra crate just for randomness.
+    let bytes = uuid::Uuid::new_v4().into_bytes();
+    let frac_x = bytes[0] as f64 / u8::MAX as f64;
+    let frac_y = bytes[1] as f64 / u8::MAX as f64;
+
+    let x = area.position.x + (span_x * frac_x).round() as i32;
+    let y = area.position.y + (span_y * frac_y).round() as i32;
+
+    let _ = window.set_position(PhysicalPosition::new(x, y));
 }
 
 /// Build the native menu bar and wire updater menu events. macOS only needs a

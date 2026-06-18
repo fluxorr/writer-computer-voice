@@ -3,6 +3,7 @@
 ## 2026-06-16
 
 - Drag files and folders in the sidebar's `Everything` tree to move them. Drop onto a folder to move inside it, onto a file to move into that file's folder, or onto empty tree space to move to the workspace root; a multi-selection moves together. Open tabs, pinned files, and expanded folders follow the move, and name collisions are reported instead of overwriting. Dragging uses pointer events so it coexists with the existing Finder-drop-to-open behavior.
+- Open each new window at a random on-screen position instead of stacking them in the same spot, so it is obvious when more than one window is open. The position is chosen within the active display's work area (the screen minus menu bar/dock) and clamped so the whole window stays visible; it prefers the display under the cursor. This applies to secondary windows — compact single-file windows, new workspace windows, drag-drop opens, and second launches — while the first window keeps its default placement.
 
 ## 2026-06-09
 
