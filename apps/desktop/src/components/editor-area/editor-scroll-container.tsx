@@ -16,16 +16,12 @@ function ProgressiveBlur({ position }: { position: "top" | "bottom" }) {
 
   const topFade = `linear-gradient(to bottom, black 40%, transparent 80%)`;
   const bottomFade = `linear-gradient(to top, black 20%, transparent 60%)`;
+  // Static styles below mirror FADE_DISTANCE (120) and SCROLLBAR_GUTTER (18px).
   return (
     <div
-      className="pointer-events-none absolute z-10"
+      className="pointer-events-none absolute z-10 h-[120px] left-[18px] right-[18px] [backdrop-filter:blur(3px)] [-webkit-backdrop-filter:blur(3px)]"
       style={{
-        height: FADE_DISTANCE,
-        left: SCROLLBAR_GUTTER,
-        right: SCROLLBAR_GUTTER,
         [isTop ? "top" : "bottom"]: 0,
-        backdropFilter: "blur(3px)",
-        WebkitBackdropFilter: "blur(3px)",
         maskImage: isTop ? topFade : bottomFade,
         WebkitMaskImage: isTop ? topFade : bottomFade,
       }}

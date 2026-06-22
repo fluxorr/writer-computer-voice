@@ -47,7 +47,9 @@ function EditorTabButton({
   const title = documentTitle || kind.title(tab.location);
 
   return (
+    // tab row wraps a native <button> close control; HTML forbids nested buttons so it cannot become a <button>.
     <div
+      // eslint-disable-next-line react-doctor/prefer-tag-over-role
       role="button"
       tabIndex={0}
       onClick={() => onSelect(tab.id)}

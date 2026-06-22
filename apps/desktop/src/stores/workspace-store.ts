@@ -115,8 +115,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // Rust returned, not the raw input. Otherwise watcher events (which fire
     // canonical paths) miss the cache key and the sidebar goes stale on
     // aliased workspaces (e.g. `/var/...` → `/private/var/...`).
-    const entries = await tauri.readDirectory(info.root);
-    const recents = await tauri.getRecentWorkspaces();
+    const [entries, recents] = await Promise.all([
+      tauri.readDirectory(info.root),
+      tauri.getRecentWorkspaces(),
+    ]);
     set({
       root: info.root,
       chromeMode: "workspace",

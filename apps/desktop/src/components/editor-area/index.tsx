@@ -1,5 +1,6 @@
 import { useActiveTab, useActiveTabId, useOpenTabs } from "@/hooks/use-tabs";
 import { pageKind } from "./page-kinds";
+import { pageKindView } from "./page-kinds/views";
 import { EditorSearchOverlay } from "./editor-search-overlay";
 import { AnchorWarningBanner } from "./anchor-warning-banner";
 
@@ -19,7 +20,7 @@ function EditorArea({ showFooter = true }: EditorAreaProps) {
           const k = pageKind(tab.location);
           const isActive = tab.id === activeTabId;
           if (!k.keepAlive && !isActive) return null;
-          const Component = k.Component as React.ComponentType<{
+          const Component = pageKindView(tab.location).Component as React.ComponentType<{
             location: typeof tab.location;
             isActive: boolean;
           }>;
@@ -27,7 +28,7 @@ function EditorArea({ showFooter = true }: EditorAreaProps) {
         })}
       </div>
       {showFooter && activeTab
-        ? pageKind(activeTab.location).renderFooter?.(activeTab.location)
+        ? pageKindView(activeTab.location).renderFooter?.(activeTab.location)
         : null}
       <EditorSearchOverlay />
       <AnchorWarningBanner />

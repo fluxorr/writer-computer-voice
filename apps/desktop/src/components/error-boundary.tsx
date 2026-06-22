@@ -37,6 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
             {this.state.error.stack}
           </pre>
           <button
+            type="button"
             onClick={this.handleRetry}
             className="mt-6 py-2 px-4 bg-[#333] text-[#ccc] border border-[#555] rounded"
           >

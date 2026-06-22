@@ -2,12 +2,12 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type MouseEvent,
   type PointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
   useDirectoryCache,
   useExpandedDirs,
@@ -21,24 +21,14 @@ import {
 } from "@/hooks/use-file-tree";
 import { useOpenFile } from "@/hooks/use-tabs";
 import { useSetting } from "@/hooks/use-settings";
-import {
-  getOpenFile,
-  getOpenFiles,
-  openFileInNewTab as openFileInNewTabAction,
-  removePathReferences,
-  removePathsWithPrefix,
-} from "@/hooks/editor-api";
 import { useWorkspaceRoot } from "@/hooks/use-workspace";
 import * as tauri from "@/lib/tauri";
-import { getFileStem, getParentDir, getRelativePath } from "@/lib/paths";
-import { duplicateFile } from "./duplicate-file";
+import { getFileStem, getParentDir } from "@/lib/paths";
 import { useMoveEntry } from "./use-move-entry";
 import { useTreeDrag } from "./use-tree-drag";
+import { useFileTreeContextMenus } from "./use-file-tree-context-menus";
 import { DragGhost } from "./drag-ghost";
 import { FileTreeNode } from "./file-tree-node";
-import { showFileContextMenu } from "./file-context-menu";
-import { showFolderContextMenu } from "./folder-context-menu";
-import { showBulkContextMenu } from "./bulk-context-menu";
 import { flattenTree } from "./flatten-tree";
 import { useAutoRefresh } from "./use-auto-refresh";
 import type { DirEntry } from "@/types/fs";
@@ -53,22 +43,6 @@ function getExtension(name: string): string {
   const dot = name.lastIndexOf(".");
   if (dot <= 0) return "";
   return name.slice(dot);
-}
-
-async function resolveUniqueName(
-  parentPath: string,
-  baseName: string,
-  extension: string,
-): Promise<string> {
-  const first = `${parentPath}/${baseName}${extension}`;
-  if (!(await tauri.fileExists(first))) return first;
-
-  for (let n = 2; n < 1000; n += 1) {
-    const candidate = `${parentPath}/${baseName} ${n}${extension}`;
-    if (!(await tauri.fileExists(candidate))) return candidate;
-  }
-
-  throw new Error(`Could not find an available name for "${baseName}" in ${parentPath}`);
 }
 
 export function FileTree({
@@ -92,9 +66,13 @@ export function FileTree({
   const fileLabelMode = useSetting("appearance.sidebar-file-label");
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
-  const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
+  // Anchor for shift range-select. Only read inside handlers, never rendered,
+  // so a ref avoids re-renders that a useState would trigger on every change.
+  const selectionAnchorRef = useRef<string | null>(null);
 
-  const entries = directoryCache.get(rootPath) ?? [];
+  // Memoized so the `?? []` fallback doesn't hand `flattenTree` a fresh array
+  // reference every render (which would re-run that memo needlessly).
+  const entries = useMemo(() => directoryCache.get(rootPath) ?? [], [directoryCache, rootPath]);
 
   // Self-heal: if root was evicted from cache, reload it
   useAutoRefresh(rootPath, entries.length === 0);
@@ -112,7 +90,7 @@ export function FileTree({
 
   const clearSelection = useCallback(() => {
     setSelectedPaths(new Set());
-    setSelectionAnchor(null);
+    selectionAnchorRef.current = null;
   }, []);
 
   const { containerRef, ghostRef, draggingPaths, dropHighlight, dragGhost, beginDrag } =
@@ -132,7 +110,7 @@ export function FileTree({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setSelectedPaths(new Set());
-        setSelectionAnchor(null);
+        selectionAnchorRef.current = null;
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -148,7 +126,7 @@ export function FileTree({
       // Shift/Cmd presses adjust the selection and never start a drag.
       if (event.shiftKey) {
         // Range select from the anchor to this row, replacing the selection.
-        const anchor = selectionAnchor ?? flatItems[0]?.entry.path ?? null;
+        const anchor = selectionAnchorRef.current ?? flatItems[0]?.entry.path ?? null;
         if (!anchor) return;
         const anchorIndex = flatItems.findIndex((item) => item.entry.path === anchor);
         const targetIndex = flatItems.findIndex((item) => item.entry.path === entry.path);
@@ -166,7 +144,7 @@ export function FileTree({
         if (next.has(entry.path)) next.delete(entry.path);
         else next.add(entry.path);
         setSelectedPaths(next);
-        setSelectionAnchor(entry.path);
+        selectionAnchorRef.current = entry.path;
         return;
       }
 
@@ -181,12 +159,12 @@ export function FileTree({
         if (!dragged.some((item) => item.path === entry.path)) dragged.push(entry);
       } else {
         if (selectedPaths.size > 0) setSelectedPaths(new Set());
-        setSelectionAnchor(entry.path);
+        selectionAnchorRef.current = entry.path;
         dragged = [entry];
       }
       beginDrag(event, dragged, entry);
     },
-    [beginDrag, entryByPath, flatItems, selectedPaths, selectionAnchor],
+    [beginDrag, entryByPath, flatItems, selectedPaths],
   );
 
   // A plain click (no drag — drags suppress the click) opens/toggles the row and
@@ -196,7 +174,7 @@ export function FileTree({
     (event: MouseEvent<HTMLElement>, entry: DirEntry) => {
       if (event.shiftKey || event.metaKey || event.ctrlKey) return;
       setSelectedPaths(new Set());
-      setSelectionAnchor(entry.path);
+      selectionAnchorRef.current = entry.path;
       if (entry.is_dir) {
         void toggleDirectory(entry.path);
       } else {
@@ -248,248 +226,21 @@ export function FileTree({
     setRenamingPath(null);
   }, []);
 
-  const handleFileContextMenu = useCallback(
-    (entry: DirEntry) => {
-      const parent = getParentDir(entry.path);
-      const relative = workspaceRoot ? getRelativePath(entry.path, workspaceRoot) : entry.path;
-
-      void showFileContextMenu({
-        isPinned: pinnedFiles.includes(entry.path),
-        onOpen: () => {
-          void openFile(entry.path);
-        },
-        onOpenInNewTab: () => {
-          void openFileInNewTabAction(entry.path).catch((error: unknown) => {
-            window.alert(
-              `Failed to open in new tab: ${error instanceof Error ? error.message : String(error)}`,
-            );
-          });
-        },
-        onDuplicate: () => {
-          void (async () => {
-            try {
-              const newPath = await duplicateFile(entry.path);
-              await refreshDirectory(parent);
-              await openFileInNewTabAction(newPath);
-            } catch (error) {
-              window.alert(
-                `Failed to duplicate: ${error instanceof Error ? error.message : String(error)}`,
-              );
-            }
-          })();
-        },
-        onTogglePin: () => {
-          togglePinnedFile(entry.path);
-        },
-        onCopyRelativePath: () => {
-          void writeText(relative);
-        },
-        onCopyAbsolutePath: () => {
-          void writeText(entry.path);
-        },
-        onReveal: () => {
-          void tauri.revealInFileManager(entry.path).catch((error: unknown) => {
-            window.alert(
-              `Failed to reveal: ${error instanceof Error ? error.message : String(error)}`,
-            );
-          });
-        },
-        onRename: () => {
-          setRenamingPath(entry.path);
-        },
-        onDelete: () => {
-          void (async () => {
-            const openFileState = getOpenFile(entry.path);
-            if (openFileState?.isDirty) {
-              const confirmed = window.confirm(
-                `"${entry.name}" has unsaved changes. Delete anyway?`,
-              );
-              if (!confirmed) return;
-            }
-            try {
-              await tauri.deleteEntry(entry.path);
-              removePathReferences(entry.path);
-              removePinnedFile(entry.path);
-              await refreshDirectory(parent);
-            } catch (error) {
-              window.alert(
-                `Failed to delete: ${error instanceof Error ? error.message : String(error)}`,
-              );
-            }
-          })();
-        },
-      });
-    },
-    [openFile, pinnedFiles, refreshDirectory, removePinnedFile, togglePinnedFile, workspaceRoot],
-  );
-
-  const handleFolderContextMenu = useCallback(
-    (entry: DirEntry) => {
-      const parent = getParentDir(entry.path);
-      const relative = workspaceRoot ? getRelativePath(entry.path, workspaceRoot) : entry.path;
-
-      void showFolderContextMenu({
-        onNewFile: () => {
-          void (async () => {
-            try {
-              const filePath = await resolveUniqueName(entry.path, "Untitled", ".md");
-              await tauri.createFile(filePath);
-              // Expand the folder so the new file is visible
-              if (!expandedDirs.has(entry.path)) {
-                await toggleDirectory(entry.path);
-              } else {
-                await refreshDirectory(entry.path);
-              }
-              setRenamingPath(filePath);
-            } catch (error) {
-              window.alert(
-                `Failed to create file: ${error instanceof Error ? error.message : String(error)}`,
-              );
-            }
-          })();
-        },
-        onNewFolder: () => {
-          void (async () => {
-            try {
-              const folderPath = await resolveUniqueName(entry.path, "Untitled Folder", "");
-              await tauri.createDirectory(folderPath);
-              // Expand the parent folder so the new folder is visible
-              if (!expandedDirs.has(entry.path)) {
-                await toggleDirectory(entry.path);
-              } else {
-                await refreshDirectory(entry.path);
-              }
-              setRenamingPath(folderPath);
-            } catch (error) {
-              window.alert(
-                `Failed to create folder: ${error instanceof Error ? error.message : String(error)}`,
-              );
-            }
-          })();
-        },
-        onCopyRelativePath: () => {
-          void writeText(relative);
-        },
-        onCopyAbsolutePath: () => {
-          void writeText(entry.path);
-        },
-        onReveal: () => {
-          void tauri.revealInFileManager(entry.path).catch((error: unknown) => {
-            window.alert(
-              `Failed to reveal: ${error instanceof Error ? error.message : String(error)}`,
-            );
-          });
-        },
-        onRename: () => {
-          setRenamingPath(entry.path);
-        },
-        onDelete: () => {
-          void (async () => {
-            // Check if any open files inside this folder are dirty
-            const openFiles = getOpenFiles();
-            const dirPrefix = `${entry.path}/`;
-            let dirtyCount = 0;
-            for (const [path, file] of openFiles) {
-              if (path.startsWith(dirPrefix) && file.isDirty) {
-                dirtyCount += 1;
-              }
-            }
-
-            if (dirtyCount > 0) {
-              const confirmed = window.confirm(
-                `"${entry.name}" contains ${dirtyCount} unsaved file${dirtyCount > 1 ? "s" : ""}. Delete anyway?`,
-              );
-              if (!confirmed) return;
-            }
-
-            try {
-              await tauri.deleteEntry(entry.path);
-              removePathsWithPrefix(entry.path);
-              removePinnedFilesWithPrefix(entry.path);
-              invalidatePath(entry.path);
-              await refreshDirectory(parent);
-            } catch (error) {
-              window.alert(
-                `Failed to delete: ${error instanceof Error ? error.message : String(error)}`,
-              );
-            }
-          })();
-        },
-      });
-    },
-    [
-      expandedDirs,
-      invalidatePath,
-      refreshDirectory,
-      removePinnedFilesWithPrefix,
-      toggleDirectory,
+  const { handleFileContextMenu, handleFolderContextMenu, handleBulkContextMenu } =
+    useFileTreeContextMenus({
+      openFile,
       workspaceRoot,
-    ],
-  );
-
-  const handleBulkContextMenu = useCallback(
-    (paths: Set<string>) => {
-      const pathArray = [...paths];
-
-      void showBulkContextMenu(
-        {
-          onCopyRelativePaths: () => {
-            const relatives = pathArray.map((p) =>
-              workspaceRoot ? getRelativePath(p, workspaceRoot) : p,
-            );
-            void writeText(relatives.join("\n"));
-          },
-          onCopyAbsolutePaths: () => {
-            void writeText(pathArray.join("\n"));
-          },
-          onDelete: () => {
-            void (async () => {
-              // Check for dirty files
-              const openFilesMap = getOpenFiles();
-              let dirtyCount = 0;
-              for (const p of pathArray) {
-                const file = openFilesMap.get(p);
-                if (file?.isDirty) dirtyCount += 1;
-              }
-
-              if (dirtyCount > 0) {
-                const confirmed = window.confirm(
-                  `${dirtyCount} of ${pathArray.length} selected items have unsaved changes. Delete anyway?`,
-                );
-                if (!confirmed) return;
-              } else {
-                const confirmed = window.confirm(`Delete ${pathArray.length} items?`);
-                if (!confirmed) return;
-              }
-
-              const parentDirs = new Set<string>();
-              for (const p of pathArray) {
-                try {
-                  await tauri.deleteEntry(p);
-                  removePathReferences(p);
-                  removePinnedFile(p);
-                  removePinnedFilesWithPrefix(p);
-                  parentDirs.add(getParentDir(p));
-                } catch (error) {
-                  window.alert(
-                    `Failed to delete "${p}": ${error instanceof Error ? error.message : String(error)}`,
-                  );
-                }
-              }
-
-              setSelectedPaths(new Set());
-              setSelectionAnchor(null);
-              for (const dir of parentDirs) {
-                await refreshDirectory(dir);
-              }
-            })();
-          },
-        },
-        pathArray.length,
-      );
-    },
-    [refreshDirectory, removePinnedFile, removePinnedFilesWithPrefix, workspaceRoot],
-  );
+      pinnedFiles,
+      togglePinnedFile,
+      removePinnedFile,
+      removePinnedFilesWithPrefix,
+      expandedDirs,
+      toggleDirectory,
+      refreshDirectory,
+      invalidatePath,
+      setRenamingPath,
+      clearSelection,
+    });
 
   const handleContextMenu = useCallback(
     (_event: MouseEvent<HTMLElement>, entry: DirEntry) => {
@@ -503,8 +254,7 @@ export function FileTree({
       }
 
       // Clear selection for single-item context menu
-      setSelectedPaths(new Set());
-      setSelectionAnchor(null);
+      clearSelection();
 
       if (entry.is_dir) {
         handleFolderContextMenu(entry);
@@ -513,6 +263,7 @@ export function FileTree({
       }
     },
     [
+      clearSelection,
       enableContextMenus,
       handleBulkContextMenu,
       handleFileContextMenu,

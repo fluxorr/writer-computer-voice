@@ -11,6 +11,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { StreamLanguage } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
+import DOMPurify from "dompurify";
 import { baseSyntaxHighlights, generalSyntaxHighlights } from "@/lib/prosemark-core/main";
 
 export const MERMAID_CANVAS_HEIGHT = 480;
@@ -75,7 +76,7 @@ export function mountMermaidCanvas(
 
   const stage = document.createElement("div");
   stage.className = "cm-mermaid-canvas-stage";
-  stage.innerHTML = opts.svgHtml;
+  stage.innerHTML = sanitizeSvgHtml(opts.svgHtml);
   // Hide the stage until the first fit. `toDOM` runs before the wrapper is in
   // the document, so `viewport.clientWidth` is 0 — we can't compute the
   // centered transform synchronously. Without this the user briefly sees the
@@ -318,6 +319,8 @@ export function mountMermaidCanvas(
   // Wheel: only zoom when a modifier is held (Cmd/Ctrl) or when a trackpad
   // pinch fires the synthetic wheel event with ctrlKey set. Otherwise let the
   // event bubble so the surrounding document scrolls past the canvas.
+  // Handler calls e.preventDefault() for Cmd/Ctrl-wheel zoom and trackpad pinch; a passive listener would ignore it. Already registered with {passive:false}.
+  // eslint-disable-next-line react-doctor/client-passive-event-listeners
   viewport.addEventListener(
     "wheel",
     (e) => {
@@ -428,7 +431,7 @@ export function mountMermaidCanvas(
     // Re-render: replace stage's SVG, reset measurement cache, refit.
     stage.style.width = "";
     stage.style.height = "";
-    stage.innerHTML = svgHtml;
+    stage.innerHTML = sanitizeSvgHtml(svgHtml);
     svg = stage.querySelector("svg") as SVGSVGElement | null;
     decorateSvg(svg, opts.ariaLabel);
     naturalW = 0;
@@ -449,6 +452,16 @@ export function mountMermaidCanvas(
   }
 
   return { updateSource, destroy };
+}
+
+// Sanitize the rendered SVG right at the `innerHTML` sink. The renderer
+// (`mermaid-renderer.ts`) already strips scripts/on*= handlers, but documents
+// come from external sources (vaults, repos) and the value flows straight to
+// `innerHTML`, so we keep a DOMPurify pass at the trust boundary. The SVG
+// profile preserves the `<style>` block, the root `style` attribute (CSS
+// custom properties for theming), and `viewBox` that `measureNatural` reads.
+function sanitizeSvgHtml(svgHtml: string): string {
+  return DOMPurify.sanitize(svgHtml, { USE_PROFILES: { svg: true, svgFilters: true } });
 }
 
 function decorateSvg(svg: SVGSVGElement | null, ariaLabel: string): void {

@@ -5,10 +5,10 @@ import type { SearchResult } from "@/types/fs";
 export function useFuzzySearch(query: string, limit = 20) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const hasQuery = query.trim() !== "";
 
   useEffect(() => {
-    if (!query.trim()) {
-      setResults([]);
+    if (!hasQuery) {
       return;
     }
 
@@ -25,7 +25,9 @@ export function useFuzzySearch(query: string, limit = 20) {
         clearTimeout(debounceRef.current);
       }
     };
-  }, [query, limit]);
+  }, [query, limit, hasQuery]);
 
-  return results;
+  // Empty queries have no results — derive this during render instead of
+  // clearing state in the effect, so callers never see a stale frame.
+  return hasQuery ? results : [];
 }

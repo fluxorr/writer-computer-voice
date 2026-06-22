@@ -1,16 +1,21 @@
 import { useCallback, useRef, useState } from "react";
 import { useFrontmatter } from "@/hooks/use-frontmatter";
-import { parseYamlEntries, serializeYamlEntries, type YamlEntry } from "@/lib/yaml-entries";
+import {
+  makeEntryId,
+  parseYamlEntries,
+  serializeYamlEntries,
+  type YamlEntry,
+} from "@/lib/yaml-entries";
 
 // State machine for frontmatter rows:
 //   - A row is either "placeholder" (key === "" && value === "") or "committed".
 //   - When frontmatter exists but has no committed entries, show one placeholder.
-//   - A placeholder row mounts with `autoFocus` on its key input.
+//   - A placeholder row focuses its key input on mount (via a ref callback).
 //   - On blur, a row whose key is still empty is removed.
 //   - When the last row is removed, the whole frontmatter block is removed.
 
 function makeEmptyRow(): YamlEntry {
-  return { key: "", value: "", isComplex: false };
+  return { id: makeEntryId(), key: "", value: "", isComplex: false };
 }
 
 function seedOrParse(frontmatter: string | null): YamlEntry[] {

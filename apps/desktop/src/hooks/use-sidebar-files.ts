@@ -10,7 +10,7 @@ import type { DirEntry } from "@/types/fs";
 
 export const SIDEBAR_SECTION_PAGE_SIZE = 6;
 export const RECENTS_SECTION_PAGE_SIZE = 4;
-export const RECENTS_MIN_WORKSPACE_FILE_COUNT = 10;
+const RECENTS_MIN_WORKSPACE_FILE_COUNT = 10;
 
 const RECENTS_READ_PAGE_SIZE = 100;
 
@@ -29,14 +29,20 @@ export function useRecentSidebarFiles(visibleCount: number): SidebarFilesState {
   const metadataVersion = useSidebarMetadataVersion();
   const [state, setState] = useState<SidebarFilesState>(EMPTY_STATE);
 
+  // Async Tauri I/O effect: setState calls are a precondition guard, a loading flag, and async .then/.catch handlers, never a synchronous cascade.
+  // eslint-disable-next-line react-doctor/no-cascading-set-state
   useEffect(() => {
     if (!root || fileCount < RECENTS_MIN_WORKSPACE_FILE_COUNT) {
+      // Precondition guard (no root / too few files) for an async data-loading effect, not prop mirroring.
+      // eslint-disable-next-line react-doctor/no-adjust-state-on-prop-change
       setState(EMPTY_STATE);
       return;
     }
 
     let cancelled = false;
     const pinnedSet = new Set(pinnedFiles);
+    // Loading flag set immediately before async readRecentFiles I/O; the result cannot be derived during render.
+    // eslint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     setState((current) => ({ ...current, isLoading: true }));
     void (async () => {
       const unpinnedEntries: DirEntry[] = [];
@@ -82,14 +88,20 @@ export function usePinnedSidebarFiles(visibleCount: number): SidebarFilesState {
   const metadataVersion = useSidebarMetadataVersion();
   const [state, setState] = useState<SidebarFilesState>(EMPTY_STATE);
 
+  // Async Tauri I/O effect (readFileEntries): setState calls are a precondition guard, a loading flag, and async .then/.catch handlers, not a synchronous cascade.
+  // eslint-disable-next-line react-doctor/no-cascading-set-state
   useEffect(() => {
     if (!root || pinnedFiles.length === 0) {
+      // Precondition guard (no root / no pinned files) for an async data-loading effect, not prop mirroring.
+      // eslint-disable-next-line react-doctor/no-adjust-state-on-prop-change
       setState(EMPTY_STATE);
       return;
     }
 
     let cancelled = false;
     const paths = pinnedFiles.slice(0, visibleCount + 1);
+    // Loading flag set before async readFileEntries I/O; the awaited result cannot be derived during render.
+    // eslint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     setState((current) => ({ ...current, isLoading: true }));
     void tauri
       .readFileEntries(paths)

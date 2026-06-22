@@ -73,14 +73,14 @@ export function EditorSearchOverlay() {
     });
     return () => cancelAnimationFrame(focusFrame);
     // Only runs when the overlay is explicitly opened.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-doctor/exhaustive-deps
   }, [isOpen, view, openVersion]);
 
   const matchInfo = useMemo(() => {
     if (!isOpen || !view) return null;
     return computeMatchInfo(view, query);
     // docVersion bumps on every doc/selection change so the count recomputes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-doctor/exhaustive-deps
   }, [isOpen, view, query, docVersion]);
 
   const actions = useMemo(() => {

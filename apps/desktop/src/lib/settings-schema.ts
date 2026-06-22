@@ -85,7 +85,7 @@ export type PrimarySet = Record<PrimarySuffix, string | number>;
 
 const PRIMARY_PREFIX = (mode: ThemeMode) => `theme.${mode}.`;
 
-export function presetKey(mode: ThemeMode): string {
+function presetKey(mode: ThemeMode): string {
   return `theme.${mode}.preset`;
 }
 
@@ -100,101 +100,4 @@ export function getPrimaryDefs(mode: ThemeMode): SettingDef[] {
 
 export function suffixOf(mode: ThemeMode, key: string): PrimarySuffix {
   return key.slice(PRIMARY_PREFIX(mode).length) as PrimarySuffix;
-}
-
-function clampNumber(value: unknown, max: number): number {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(max, n));
-}
-
-function isNumericType(def: SettingDef): boolean {
-  return def.type === "number" || def.type === "range";
-}
-
-function readPrimaryValue(def: SettingDef, settings: Record<string, unknown>): string | number {
-  const v = settings[def.key];
-  if (isNumericType(def)) {
-    return clampNumber(v, def.max ?? Number.POSITIVE_INFINITY);
-  }
-  return typeof v === "string" ? v : (def.default as string);
-}
-
-/** Read a PrimarySet for `mode` from a flat settings record. Iterates the
- *  schema so adding/removing a primary in JSON automatically flows through. */
-export function readPrimaries(mode: ThemeMode, settings: Record<string, unknown>): PrimarySet {
-  const out = {} as PrimarySet;
-  for (const def of getPrimaryDefs(mode)) {
-    out[suffixOf(mode, def.key)] = readPrimaryValue(def, settings);
-  }
-  return out;
-}
-
-// ---------- Default theme presets ----------
-//
-// Each preset lives in its own folder under `shared/themes/<slug>/`, with
-// `light.json` and `dark.json` holding just the primary values for that
-// mode. Splitting per-mode keeps each file small and lets a preset author
-// edit one mode without touching the other. Glob is used so dropping a new
-// folder under `themes/` registers a new preset automatically.
-
-const presetFiles = import.meta.glob<PrimarySet>("@shared/themes/*/*.json", {
-  eager: true,
-  import: "default",
-});
-
-function slugToDisplayName(slug: string): string {
-  return slug
-    .split("-")
-    .map((part) => (part.length === 0 ? "" : part[0].toUpperCase() + part.slice(1)))
-    .join(" ");
-}
-
-function buildPresets(): Record<string, { light: PrimarySet; dark: PrimarySet }> {
-  const partial = new Map<string, Partial<{ light: PrimarySet; dark: PrimarySet }>>();
-  // Sort by path for stable iteration; we assemble by slug regardless, but
-  // a deterministic order makes the resulting `PRESET_NAMES` stable too.
-  const entries = Object.entries(presetFiles).sort(([a], [b]) => a.localeCompare(b));
-  for (const [path, primaries] of entries) {
-    const match = path.match(/themes\/([^/]+)\/(light|dark)\.json$/);
-    if (!match) continue;
-    const [, slug, mode] = match;
-    const name = slugToDisplayName(slug);
-    const bundle = partial.get(name) ?? {};
-    bundle[mode as ThemeMode] = primaries;
-    partial.set(name, bundle);
-  }
-  const out: Record<string, { light: PrimarySet; dark: PrimarySet }> = {};
-  for (const [name, bundle] of partial) {
-    if (!bundle.light || !bundle.dark) {
-      throw new Error(
-        `Preset "${name}" is missing a light or dark JSON file under shared/themes/.`,
-      );
-    }
-    out[name] = { light: bundle.light, dark: bundle.dark };
-  }
-  return out;
-}
-
-/** Built-in theme bundles, keyed by display name. Order follows the slug's
- *  alphabetical order. */
-export const THEME_PRESETS: Record<string, { light: PrimarySet; dark: PrimarySet }> =
-  buildPresets();
-
-export type PresetName = string;
-
-export const PRESET_NAMES: PresetName[] = Object.keys(THEME_PRESETS);
-
-function valuesEqual(a: string | number, b: string | number): boolean {
-  if (typeof a === "string" && typeof b === "string") return a.toLowerCase() === b.toLowerCase();
-  return a === b;
-}
-
-/** True if the given primaries match the named preset's values exactly. */
-export function matchesPreset(primaries: PrimarySet, preset: PresetName, mode: ThemeMode): boolean {
-  const p = THEME_PRESETS[preset][mode];
-  for (const key of Object.keys(p) as PrimarySuffix[]) {
-    if (!valuesEqual(primaries[key], p[key])) return false;
-  }
-  return true;
 }

@@ -352,6 +352,8 @@ export function useTreeDrag({
   // Measure the destination "container" — the drop-target folder row plus its
   // visible descendants — into a single rectangle so it can be highlighted as
   // one block rather than per-row. Recomputed when the target or tree changes.
+  // The setDropHighlight calls are mutually-exclusive early-return branches writing one state atom; at most one runs per pass, so there is no multi-render cascade.
+  // eslint-disable-next-line react-doctor/no-cascading-set-state
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container || dropTargetDir === null) {

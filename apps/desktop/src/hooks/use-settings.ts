@@ -10,11 +10,6 @@ export function useSetting<K extends SettingKey>(key: K): SettingsMap[K] | undef
   return useSettingsStore((state) => state.settings[key as string]) as SettingsMap[K] | undefined;
 }
 
-/** Subscribe to whether the settings store has finished hydrating. */
-export function useSettingsLoaded() {
-  return useSettingsStore((state) => state.isLoaded);
-}
-
 /** Stable function reference for writing a setting. Function identity in the
  *  store doesn't change, so this hook never causes re-renders. */
 export function useSetSetting() {

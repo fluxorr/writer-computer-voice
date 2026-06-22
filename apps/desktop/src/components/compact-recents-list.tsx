@@ -41,7 +41,7 @@ export function CompactRecentsList({
       <div className={SIDEBAR_SECTION_LABEL_CLASS}>Recents</div>
 
       {visibleRecentFiles.length > 0 ? (
-        <div role="list" aria-label="Recent files" className="flex flex-col gap-px">
+        <menu aria-label="Recent files" className="flex flex-col gap-px">
           {visibleRecentFiles.map((entry) => (
             <RecentFileRow
               key={entry.path}
@@ -51,7 +51,7 @@ export function CompactRecentsList({
               onRemove={remove}
             />
           ))}
-        </div>
+        </menu>
       ) : (
         <div className="px-2.5 py-3 text-[13px] text-[var(--text-muted)]">
           No other recent files.

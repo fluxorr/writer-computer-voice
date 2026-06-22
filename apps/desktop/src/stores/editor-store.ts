@@ -8,7 +8,7 @@ import {
   type TitleSource,
 } from "@/lib/frontmatter";
 import { getDocumentStats, type DocumentStats } from "@/lib/document-stats";
-import { cancelSave, scheduleSave } from "@/lib/save";
+import { cancelSave, scheduleSave, registerSaveStore } from "@/lib/save";
 import {
   locationBehavior,
   serializeLocation,
@@ -390,7 +390,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const nextTab = createFileTab(path);
     set((state) => {
       const candidatePaths = [
-        ...new Set(state.tabs.flatMap((tab) => tabPaths(tab)).filter((p) => p !== path)),
+        ...new Set(state.tabs.flatMap((tab) => tabPaths(tab).filter((p) => p !== path))),
       ];
       const filesWithTarget = state.openFiles.has(path)
         ? null
@@ -1207,6 +1207,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 }));
+
+// Wire the save engine to this store. The save module lives in `lib/` and must
+// not import `stores/`, so it reads/writes the store through this injected
+// accessor instead (see `registerSaveStore`).
+registerSaveStore({
+  getOpenFile: (path) => useEditorStore.getState().openFiles.get(path),
+  markSaved: (path, diskContent, hasNewerChanges) =>
+    useEditorStore.getState().markSaved(path, diskContent, hasNewerChanges),
+  setSaveError: (path, error) => useEditorStore.getState().setSaveError(path, error),
+});
 
 export function getEditorSessionSnapshot(state: Pick<EditorState, "tabs" | "activeTabId">) {
   const tabs: SessionTab[] = [];

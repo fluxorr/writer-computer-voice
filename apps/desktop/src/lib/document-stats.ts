@@ -20,10 +20,10 @@ export function getDocumentStats(content: string): DocumentStats {
   const paragraphs =
     normalized === ""
       ? 0
-      : normalized
-          .split(/\n\s*\n/)
-          .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
-          .filter(Boolean).length;
+      : normalized.split(/\n\s*\n/).flatMap((paragraph) => {
+          const normalizedParagraph = paragraph.replace(/\s+/g, " ").trim();
+          return normalizedParagraph ? [normalizedParagraph] : [];
+        }).length;
 
   return { words, characters, paragraphs };
 }

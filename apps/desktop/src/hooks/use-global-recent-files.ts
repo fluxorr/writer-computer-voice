@@ -2,6 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import * as tauri from "@/lib/tauri";
 import type { RecentFile } from "@/lib/tauri";
 
+// This hook's `files` state is populated from async Tauri IPC and optimistically
+// mutated by remove() — it is not derivable during render, so no-derived-state
+// does not apply here.
+/* eslint-disable react-doctor/no-derived-state */
+
 interface GlobalRecentFiles {
   files: RecentFile[];
   /** Remove one entry from the global recents (optimistic + persisted). */

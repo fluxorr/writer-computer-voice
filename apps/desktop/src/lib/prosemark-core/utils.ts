@@ -92,9 +92,11 @@ export function eventHandlersWithClass<This>(
   handlers: ClassBasedEventHandlers<This>,
 ): DOMEventHandlers<This> {
   return Object.fromEntries(
-    Object.entries(handlers)
-      .filter(([_event, handlers]) => !!handlers)
-      .map(([event, handlers]) => [
+    Object.entries(handlers).reduce<
+      [string, (this: This, ev: Event, view: EditorView) => boolean][]
+    >((acc, [event, handlers]) => {
+      if (!handlers) return acc;
+      acc.push([
         event,
         function (this: This, ev: Event, view: EditorView) {
           const res = [];
@@ -116,6 +118,8 @@ export function eventHandlersWithClass<This>(
           }
           return res.some((res) => !!res);
         },
-      ]),
+      ]);
+      return acc;
+    }, []),
   );
 }

@@ -13,7 +13,3 @@ export function consumePendingAnchor(path: string): string | undefined {
   if (anchor !== undefined) pending.delete(path);
   return anchor;
 }
-
-export function clearPendingAnchor(path: string): void {
-  pending.delete(path);
-}

@@ -42,6 +42,23 @@ function toCreatePath(root: string, rawName: string) {
   return `${root}/${fileName}`;
 }
 
+function matchesSearch(text: string, q: string) {
+  return text.toLowerCase().includes(q.toLowerCase());
+}
+
+function HighlightedPath({ path, indices }: { path: string; indices: number[] }) {
+  const set = new Set(indices);
+  return (
+    <span>
+      {Array.from(path).map((char, i) => (
+        <span key={i} className={set.has(i) ? "text-link font-semibold" : undefined}>
+          {char}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function CommandPalette() {
   const isOpen = useIsCommandPaletteOpen();
   const close = useCloseCommandPalette();
@@ -72,10 +89,6 @@ export function CommandPalette() {
   const createBaseDir = root ?? (activeFilePath ? getParentDir(activeFilePath) : null);
   const createPath =
     createBaseDir && trimmedSearch ? toCreatePath(createBaseDir, trimmedSearch) : null;
-
-  function matchesSearch(text: string, q: string) {
-    return text.toLowerCase().includes(q.toLowerCase());
-  }
 
   function handleSelect(path: string) {
     void (isCompactFileMode ? openStandaloneFile(path) : openFile(path));
@@ -218,23 +231,13 @@ export function CommandPalette() {
   // Snap selection + scroll to the first item whenever the search/intent
   // changes, or when async file results arrive and the first item shifts.
   // firstValue is a primitive, so this is stable across renders.
+  // selectedValue is also set by cmdk onValueChange (keyboard nav) and this effect also scrolls the list — not pure derived state.
+  /* eslint-disable react-doctor/no-derived-state */
   useEffect(() => {
     setSelectedValue(firstValue);
     listRef.current?.scrollTo({ top: 0 });
   }, [search, intent, firstValue]);
-
-  function renderHighlightedPath(path: string, indices: number[]) {
-    const set = new Set(indices);
-    return (
-      <span>
-        {Array.from(path).map((char, i) => (
-          <span key={i} className={set.has(i) ? "text-link font-semibold" : undefined}>
-            {char}
-          </span>
-        ))}
-      </span>
-    );
-  }
+  /* eslint-enable react-doctor/no-derived-state */
 
   const placeholder = isCreateIntent ? "Create a new note..." : "Search...";
 
@@ -296,7 +299,7 @@ export function CommandPalette() {
                     <div className="flex min-w-0 flex-col">
                       <span className="truncate">{getFileName(r.path)}</span>
                       <span className="truncate text-[13px] text-text-muted">
-                        {renderHighlightedPath(r.relative_path, r.match_indices)}
+                        <HighlightedPath path={r.relative_path} indices={r.match_indices} />
                       </span>
                     </div>
                   </CommandItem>

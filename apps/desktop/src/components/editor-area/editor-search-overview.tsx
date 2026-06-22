@@ -15,7 +15,7 @@ export function EditorSearchOverview({ scrollContainerRef }: EditorSearchOvervie
     if (!isOpen || !view || !query) return null;
     return collectMatches(view, query);
     // docVersion bumps on doc/selection change; recompute marks then.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
   }, [isOpen, view, query, docVersion]);
 
   // Re-render when the scroll container resizes so marks stay aligned with

@@ -1,9 +1,17 @@
 import { parse, stringify } from "yaml";
 
 export interface YamlEntry {
+  // Stable identity for React list keys. Generated on creation; never
+  // serialized — `serializeYamlEntries` ignores it.
+  id: string;
   key: string;
   value: string;
   isComplex: boolean;
+}
+
+let nextEntryId = 0;
+export function makeEntryId(): string {
+  return `fm-${nextEntryId++}`;
 }
 
 export function parseYamlEntries(yamlString: string): YamlEntry[] {
@@ -13,7 +21,7 @@ export function parseYamlEntries(yamlString: string): YamlEntry[] {
   try {
     parsed = parse(yamlString);
   } catch {
-    return [{ key: "", value: yamlString, isComplex: false }];
+    return [{ id: makeEntryId(), key: "", value: yamlString, isComplex: false }];
   }
 
   if (
@@ -28,12 +36,17 @@ export function parseYamlEntries(yamlString: string): YamlEntry[] {
   const obj = parsed as Record<string, unknown>;
   return Object.entries(obj).map(([key, value]) => {
     if (value === null || value === undefined) {
-      return { key, value: "", isComplex: false };
+      return { id: makeEntryId(), key, value: "", isComplex: false };
     }
     if (typeof value === "object") {
-      return { key, value: stringify(value).trim(), isComplex: true };
+      return { id: makeEntryId(), key, value: stringify(value).trim(), isComplex: true };
     }
-    return { key, value: String(value as string | number | boolean), isComplex: false };
+    return {
+      id: makeEntryId(),
+      key,
+      value: String(value as string | number | boolean),
+      isComplex: false,
+    };
   });
 }
 

@@ -31,10 +31,6 @@ export function useIsCompactFileMode() {
   return useWorkspaceChromeMode() === "compact-file";
 }
 
-export function useSetWorkspaceChromeMode() {
-  return useWorkspaceStore((s) => s.setChromeMode);
-}
-
 export function useIsStartupResolved() {
   return useWorkspaceStore((s) => s.isStartupResolved);
 }

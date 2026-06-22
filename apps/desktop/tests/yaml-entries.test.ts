@@ -1,10 +1,23 @@
 import { describe, expect, test } from "vite-plus/test";
-import { parseYamlEntries, serializeYamlEntries } from "../src/lib/yaml-entries";
+import { parseYamlEntries, serializeYamlEntries, type YamlEntry } from "../src/lib/yaml-entries";
+
+// `id` is a non-deterministic React-key field (a module-level counter) that is
+// never serialized. Compare parsed output by value only.
+const byValue = (entries: YamlEntry[]) =>
+  entries.map((e) => ({ key: e.key, value: e.value, isComplex: e.isComplex }));
+
+// Build a serialize input. `id` is ignored by serializeYamlEntries.
+const entry = (key: string, value: string, isComplex = false): YamlEntry => ({
+  id: "test",
+  key,
+  value,
+  isComplex,
+});
 
 describe("parseYamlEntries", () => {
   test("parses simple key-value pairs", () => {
     const entries = parseYamlEntries("title: Hello\nauthor: Jane");
-    expect(entries).toEqual([
+    expect(byValue(entries)).toEqual([
       { key: "title", value: "Hello", isComplex: false },
       { key: "author", value: "Jane", isComplex: false },
     ]);
@@ -12,7 +25,7 @@ describe("parseYamlEntries", () => {
 
   test("parses booleans and numbers", () => {
     const entries = parseYamlEntries("draft: false\nweight: 42\npi: 3.14");
-    expect(entries).toEqual([
+    expect(byValue(entries)).toEqual([
       { key: "draft", value: "false", isComplex: false },
       { key: "weight", value: "42", isComplex: false },
       { key: "pi", value: "3.14", isComplex: false },
@@ -57,45 +70,39 @@ describe("parseYamlEntries", () => {
 
 describe("serializeYamlEntries", () => {
   test("serializes simple entries", () => {
-    const yaml = serializeYamlEntries([
-      { key: "title", value: "Hello", isComplex: false },
-      { key: "draft", value: "false", isComplex: false },
-    ]);
+    const yaml = serializeYamlEntries([entry("title", "Hello"), entry("draft", "false")]);
     expect(yaml).toContain("title: Hello");
     expect(yaml).toContain("draft: false");
   });
 
   test("skips entries with empty keys", () => {
-    const yaml = serializeYamlEntries([
-      { key: "", value: "orphan", isComplex: false },
-      { key: "valid", value: "kept", isComplex: false },
-    ]);
+    const yaml = serializeYamlEntries([entry("", "orphan"), entry("valid", "kept")]);
     expect(yaml).not.toContain("orphan");
     expect(yaml).toContain("valid: kept");
   });
 
   test("returns empty string for no valid entries", () => {
     expect(serializeYamlEntries([])).toBe("");
-    expect(serializeYamlEntries([{ key: "", value: "x", isComplex: false }])).toBe("");
+    expect(serializeYamlEntries([entry("", "x")])).toBe("");
   });
 
   test("re-parses complex values", () => {
-    const yaml = serializeYamlEntries([{ key: "tags", value: "- a\n- b", isComplex: true }]);
+    const yaml = serializeYamlEntries([entry("tags", "- a\n- b", true)]);
     expect(yaml).toContain("tags:");
     expect(yaml).toContain("- a");
     expect(yaml).toContain("- b");
   });
 
   test("handles invalid complex value gracefully", () => {
-    const yaml = serializeYamlEntries([{ key: "bad", value: ": : :", isComplex: true }]);
+    const yaml = serializeYamlEntries([entry("bad", ": : :", true)]);
     expect(yaml).toContain("bad:");
   });
 
   test("coerces scalar types", () => {
     const yaml = serializeYamlEntries([
-      { key: "bool", value: "true", isComplex: false },
-      { key: "num", value: "42", isComplex: false },
-      { key: "str", value: "hello", isComplex: false },
+      entry("bool", "true"),
+      entry("num", "42"),
+      entry("str", "hello"),
     ]);
     expect(yaml).toContain("bool: true");
     expect(yaml).toContain("num: 42");
@@ -109,6 +116,6 @@ describe("round-trip", () => {
     const entries = parseYamlEntries(original);
     const serialized = serializeYamlEntries(entries);
     const reparsed = parseYamlEntries(serialized);
-    expect(reparsed).toEqual(entries);
+    expect(byValue(reparsed)).toEqual(byValue(entries));
   });
 });

@@ -51,10 +51,7 @@ export function useActiveHeadings(
 
   useEffect(() => {
     const scroller = scrollContainerRef.current;
-    if (!view || !scroller) {
-      if (stateRef.current !== EMPTY) setState(EMPTY);
-      return;
-    }
+    if (!view || !scroller) return;
     let frame = 0;
     const update = () => {
       frame = 0;
@@ -75,5 +72,8 @@ export function useActiveHeadings(
     };
   }, [view, scrollContainerRef, headings]);
 
-  return state;
+  // Without a live editor there is no active heading. Resolve this during
+  // render instead of via an effect so the rail never paints a stale tick
+  // from a previous file while the reset effect is pending.
+  return view ? state : EMPTY;
 }

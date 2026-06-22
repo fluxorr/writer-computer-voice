@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 
 import { AppleGlyph, WriterMark } from "../components/Mark";
 
@@ -31,10 +31,10 @@ function HomePage() {
     <div className="page">
       <main className="hero">
         <header className="site-header">
-          <a className="brand" href="/" aria-label="Writer">
+          <Link className="brand" to="/" aria-label="Writer">
             <WriterMark size={18} />
             <span className="brand-rule" aria-hidden="true" />
-          </a>
+          </Link>
           <nav className="site-nav">
             <a
               className="pill pill-ghost"
@@ -97,7 +97,15 @@ function HomePage() {
 function DemoVideo({ src }: { src: string }) {
   return (
     <div className="shot">
-      <video src={src} autoPlay muted loop playsInline preload="metadata" />
+      <video
+        src={src}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-label="Writer app demo"
+      />
     </div>
   );
 }

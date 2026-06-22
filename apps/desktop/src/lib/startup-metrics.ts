@@ -30,16 +30,6 @@ export function mark(name: string): void {
   ordered.push(fullName);
 }
 
-export async function measureAsync<T>(name: string, fn: () => Promise<T>): Promise<T> {
-  if (!isEnabled()) return fn();
-  mark(`${name}:start`);
-  try {
-    return await fn();
-  } finally {
-    mark(`${name}:end`);
-  }
-}
-
 export function logTimeline(): void {
   if (!isEnabled() || timelineLogged) return;
   if (!seen.has(ORIGIN)) return;

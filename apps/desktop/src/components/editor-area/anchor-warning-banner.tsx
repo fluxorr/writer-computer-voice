@@ -10,8 +10,8 @@ export function AnchorWarningBanner() {
       className="pointer-events-auto absolute left-1/2 top-6 z-30 max-w-[90%] -translate-x-1/2 cursor-pointer rounded-lg border-0 px-3 py-2 text-left text-[13px]"
       style={{
         background: "var(--surface-card)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
         border: "1px solid var(--line-subtler)",
         boxShadow: "0 8px 24px rgba(0, 0, 0, 0.18)",
         color: "var(--text-secondary)",

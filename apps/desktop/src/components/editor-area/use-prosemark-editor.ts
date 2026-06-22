@@ -662,6 +662,8 @@ export function useProsemarkEditor(
   const scrollCleanupRef = useRef<(() => void) | null>(null);
   const disposedRef = useRef(false);
   const filePathRef = useRef(filePath);
+  // getScrollContainer is captured into a ref only to resolve a DOM scroll container, not invoked as a callback from an effect.
+  // eslint-disable-next-line react-doctor/no-event-handler
   const getScrollContainerRef = useRef(getScrollContainer);
   const autoFocusRef = useRef(autoFocus);
   const onViewChangeRef = useRef(onViewChange);
@@ -742,10 +744,12 @@ export function useProsemarkEditor(
   }, []);
 
   // Detect path or reload-version changes and swap the document in place.
+  // Syncs the external CodeMirror EditorView to filePath/reloadVersion changes (tab switch / external reload); there is no DOM handler to host it.
   useEffect(() => {
     const view = viewRef.current;
     if (!view || disposedRef.current) return;
 
+    // eslint-disable-next-line react-doctor/no-event-handler
     const pathChanged = filePath !== prevPathRef.current;
     const reloaded = !pathChanged && reloadVersion !== prevReloadVersionRef.current;
 

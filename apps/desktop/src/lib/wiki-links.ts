@@ -98,10 +98,11 @@ export async function resolveWikiLink(
 
   if (target.includes("/")) {
     const basePath = normalizePath(`${workspaceRoot.replace(/\/$/, "")}/${target}`);
-    for (const fullPath of [`${basePath}.md`, `${basePath}.markdown`]) {
-      if (await fileExists(fullPath)) {
-        return { kind: "internal", path: fullPath };
-      }
+    const candidatePaths = [`${basePath}.md`, `${basePath}.markdown`];
+    const existence = await Promise.all(candidatePaths.map((path) => fileExists(path)));
+    const matchIndex = existence.findIndex(Boolean);
+    if (matchIndex !== -1) {
+      return { kind: "internal", path: candidatePaths[matchIndex] };
     }
     return { kind: "unresolved" };
   }

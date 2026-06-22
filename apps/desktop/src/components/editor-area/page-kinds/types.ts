@@ -12,11 +12,14 @@ export interface SerializedLocation {
 }
 
 /**
- * Input shape for `definePageKind`. Only `kind`, `Component`, and `title`
- * are required — everything else has a sensible default (see
- * `definePageKind` below). Kinds with payload (like `file`) override as many
- * as they need; stateless kinds (like `launcher`, `settings`) usually only
- * set `keepAlive` and `Component`.
+ * Input shape for `definePageKind`. Only `kind` and `title` are required —
+ * everything else has a sensible default (see `definePageKind` below). Kinds
+ * with payload (like `file`) override as many as they need; stateless kinds
+ * (like `launcher`, `settings`) usually only set `keepAlive`.
+ *
+ * This describes a kind's *behavior* only — its React view lives separately in
+ * the `pageKindViews` registry (`./views`) so the data/serialization layer
+ * (stores, hooks) never transitively imports the editor UI tree.
  */
 export interface PageKindInput<K extends string, L extends { kind: K }> {
   /** Discriminator string used as the map key and in the session `kind` field. */
@@ -26,8 +29,6 @@ export interface PageKindInput<K extends string, L extends { kind: K }> {
   /** Short human-readable description of this page kind — surfaced in the
    *  command palette and other places that want a subtitle for the kind. */
   description: string;
-  /** React renderer for the tab body. */
-  Component: ComponentType<{ location: L; isActive: boolean }>;
 
   /** Stays mounted when inactive? Default: `false`. */
   keepAlive?: boolean;
@@ -48,18 +49,18 @@ export interface PageKindInput<K extends string, L extends { kind: K }> {
   /** Session payload (excluding the `kind` tag). Default: `{}`. Return `null`
    *  to skip persistence (transient kinds like launcher). */
   serialize?: (location: L) => object | null;
-  /** Optional chrome rendered below the active tab body. */
-  renderFooter?: (location: L) => ReactNode;
 }
 
 /** A registered page kind — what you actually dispatch through at runtime
  *  after `definePageKind` has filled in the defaults. All methods are
- *  required here, so call sites never need to null-check. */
+ *  required here, so call sites never need to null-check. Behavior only — the
+ *  React view is held separately in `PageKindView` / the `pageKindViews`
+ *  registry so stores and hooks can dispatch through this without importing the
+ *  editor UI. */
 export interface PageKind<K extends string = string, L extends { kind: K } = { kind: K }> {
   kind: K;
   title: (location: L) => string;
   description: string;
-  Component: ComponentType<{ location: L; isActive: boolean }>;
   keepAlive: boolean;
   supportsFileContextMenu: boolean;
   fromPayload: (data: SerializedLocation) => L | null;
@@ -68,12 +69,21 @@ export interface PageKind<K extends string = string, L extends { kind: K } = { k
   rewritePath: (location: L, from: string, to: string) => L | null;
   removePath: (location: L, path: string) => L | null;
   serialize: (location: L) => object | null;
-  renderFooter?: (location: L) => ReactNode;
 }
 
 /** Widest `PageKind` type — used by the registry map where the specific kind
  *  isn't statically known. */
 export type AnyPageKind = PageKind<string, { kind: string }>;
+
+/** The React view for a page kind — its tab body and optional footer chrome.
+ *  Kept out of `PageKind` so the editor UI is only imported by the renderer
+ *  (`pageKindViews` in `./views`), never by the data/serialization layer. */
+export interface PageKindView<L extends { kind: string } = { kind: string }> {
+  /** React renderer for the tab body. */
+  Component: ComponentType<{ location: L; isActive: boolean }>;
+  /** Optional chrome rendered below the active tab body. */
+  renderFooter?: (location: L) => ReactNode;
+}
 
 /**
  * Assemble a `PageKind` from a sparse input by filling in defaults. This is

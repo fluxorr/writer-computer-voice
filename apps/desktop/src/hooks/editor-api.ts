@@ -1,6 +1,5 @@
-import { getEditorSessionSnapshot, useEditorStore } from "@/stores/editor-store";
+import { useEditorStore } from "@/stores/editor-store";
 export type { OpenFile, Tab, SessionTab } from "@/stores/editor-store";
-import type { SessionTab } from "@/stores/editor-store";
 
 export function getOpenFile(path: string) {
   return useEditorStore.getState().openFiles.get(path) ?? null;
@@ -10,20 +9,8 @@ export function getOpenFiles() {
   return useEditorStore.getState().openFiles;
 }
 
-export function getOpenTabs() {
-  return useEditorStore.getState().tabs;
-}
-
-export function getActiveTabId() {
-  return useEditorStore.getState().activeTabId;
-}
-
 export function getActiveFilePath() {
   return useEditorStore.getState().activeFilePath;
-}
-
-export function openNewTab() {
-  useEditorStore.getState().openNewTab();
 }
 
 export function closeFile(path: string) {
@@ -62,14 +49,6 @@ export function navigateToFile(path: string) {
   return useEditorStore.getState().navigateToFile(path);
 }
 
-export function navigateBack() {
-  return useEditorStore.getState().navigateBack();
-}
-
-export function navigateForward() {
-  return useEditorStore.getState().navigateForward();
-}
-
 export function renameOpenFile(oldPath: string, newPath: string) {
   useEditorStore.getState().renameOpenFile(oldPath, newPath);
 }
@@ -88,18 +67,4 @@ export function removePathsWithPrefix(prefix: string) {
 
 export function rewritePathPrefix(oldPrefix: string, newPrefix: string) {
   useEditorStore.getState().rewritePathPrefix(oldPrefix, newPrefix);
-}
-
-export function restoreSession(tabs: SessionTab[], activeIndex: number | null) {
-  return useEditorStore.getState().restoreSession(tabs, activeIndex);
-}
-
-export function getCursorScroll(path: string) {
-  const file = useEditorStore.getState().openFiles.get(path);
-  return { cursorPos: file?.cursorPos ?? 0, scrollPos: file?.scrollPos ?? 0 };
-}
-
-export function getSessionSnapshot() {
-  const state = useEditorStore.getState();
-  return getEditorSessionSnapshot(state);
 }

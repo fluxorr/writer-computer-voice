@@ -1,10 +1,36 @@
-import { useEditorStore } from "@/stores/editor-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { OpenFile } from "@/hooks/editor-api";
 import { serializeDocument } from "@/lib/frontmatter";
 import * as tauri from "@/lib/tauri";
 
 const THROTTLE_MS = 1000;
+
+/**
+ * The slice of editor-store behavior the save engine needs. The store injects
+ * it via `registerSaveStore` at startup so this `lib/` module never imports
+ * `stores/editor-store` — that back-edge would invert the stores → lib layering
+ * and form an import cycle (the store already imports the save engine).
+ */
+export interface SaveStoreAccess {
+  getOpenFile: (path: string) => OpenFile | undefined;
+  markSaved: (path: string, diskContent: string, hasNewerChanges: boolean) => void;
+  setSaveError: (path: string, error: string) => void;
+}
+
+let storeAccess: SaveStoreAccess | null = null;
+
+/** Wire the save engine to the editor store. Called once from editor-store at
+ *  module init. */
+export function registerSaveStore(access: SaveStoreAccess) {
+  storeAccess = access;
+}
+
+function requireStore(): SaveStoreAccess {
+  if (!storeAccess) {
+    throw new Error("[save] used before registerSaveStore() — editor store not wired");
+  }
+  return storeAccess;
+}
 
 interface SaveController {
   lastSaveTime: number;
@@ -103,7 +129,8 @@ function serializeForSave(file: OpenFile) {
 async function performSave(path: string, controller = getSaveController(path)) {
   if (controller.inFlight) return;
 
-  const file = useEditorStore.getState().openFiles.get(path);
+  const store = requireStore();
+  const file = store.getOpenFile(path);
   if (!file || !file.isDirty) {
     controller.pending = false;
     cleanupSaveController(path, controller);
@@ -120,15 +147,15 @@ async function performSave(path: string, controller = getSaveController(path)) {
   try {
     await tauri.writeFile(path, full);
 
-    const latestFile = useEditorStore.getState().openFiles.get(path);
+    const latestFile = store.getOpenFile(path);
     if (!latestFile) return;
 
     shouldReschedule = serializeForSave(latestFile) !== full;
-    useEditorStore.getState().markSaved(path, full, shouldReschedule);
+    store.markSaved(path, full, shouldReschedule);
   } catch (err) {
     console.error(`[save] Failed to save ${path}:`, err);
     const message = err instanceof Error ? err.message : String(err);
-    useEditorStore.getState().setSaveError(path, message);
+    store.setSaveError(path, message);
   } finally {
     controller.inFlight = false;
 

@@ -2,7 +2,9 @@ import {
   type CSSProperties,
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -44,6 +46,11 @@ interface PickerFrameGeometry {
   radius: number;
 }
 
+// no-giant-component: size comes from picker-shell JSX coupled to ~10 imperatively-mutated refs
+// and layout effects; a split would thread ~15 props and cannot move the effects.
+// prefer-useReducer: the 5 useState calls are independent event-driven concerns (open/mount,
+// hover, focus, metrics) with a functional-updater bail-out; a reducer would not collapse renders.
+// eslint-disable-next-line react-doctor/no-giant-component, react-doctor/prefer-useReducer
 export function CompactFileLayout() {
   const activeFilePath = useActiveFilePath();
   const openFiles = useOpenFiles();
@@ -120,19 +127,23 @@ export function CompactFileLayout() {
     setIsNavigatorOpen(false);
   }, []);
 
+  const onDismiss = useEffectEvent(() => {
+    closeNavigator();
+  });
+
   useEffect(() => {
     if (!isNavigatorOpen) return;
 
     function handlePointerDown(event: PointerEvent) {
       const target = event.target;
       if (target instanceof Node && pickerRootRef.current?.contains(target)) return;
-      closeNavigator();
+      onDismiss();
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       event.preventDefault();
-      closeNavigator();
+      onDismiss();
     }
 
     document.addEventListener("pointerdown", handlePointerDown, true);
@@ -141,8 +152,10 @@ export function CompactFileLayout() {
       document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [closeNavigator, isNavigatorOpen]);
+  }, [isNavigatorOpen]);
 
+  // measurePickerMetrics is useCallback([],stable) and is also passed to ResizeObserver, so the listener never re-subscribes and useEffectEvent cannot be passed to a non-React API.
+  // eslint-disable-next-line react-doctor/advanced-event-handler-refs
   useLayoutEffect(() => {
     measurePickerMetrics();
 
@@ -167,8 +180,12 @@ export function CompactFileLayout() {
     return () => window.clearTimeout(timeout);
   }, [isNavigatorOpen, isPickerMounted]);
 
+  // Unmount-only cleanup intentionally reads the latest *Ref.current to cancel in-flight animation frames; capturing refs at mount would cancel stale ids.
+  // eslint-disable-next-line react-doctor/exhaustive-deps
   useEffect(() => {
     return () => {
+      // Intentionally read the latest pending frame ids at unmount so we cancel
+      // whatever is in flight; capturing the refs at mount would cancel stale ids.
       if (openFrameRef.current) {
         window.cancelAnimationFrame(openFrameRef.current);
       }
@@ -191,13 +208,16 @@ export function CompactFileLayout() {
   const pickerFrameScaleY = pickerMaskHeight / pickerMetrics.openHeight;
   const pickerContentScaleX = 1 / pickerFrameScaleX;
   const pickerContentScaleY = 1 / pickerFrameScaleY;
-  const pickerFrameGeometry = {
-    left: pickerMaskLeft,
-    top: pickerMaskTop,
-    scaleX: pickerFrameScaleX,
-    scaleY: pickerFrameScaleY,
-    radius: pickerMaskRadius,
-  };
+  const pickerFrameGeometry = useMemo<PickerFrameGeometry>(
+    () => ({
+      left: pickerMaskLeft,
+      top: pickerMaskTop,
+      scaleX: pickerFrameScaleX,
+      scaleY: pickerFrameScaleY,
+      radius: pickerMaskRadius,
+    }),
+    [pickerMaskLeft, pickerMaskTop, pickerFrameScaleX, pickerFrameScaleY, pickerMaskRadius],
+  );
   const pickerShellStyle = {
     width: `${pickerMetrics.rootWidth}px`,
     height: `${pickerShellHeight}px`,
@@ -292,13 +312,7 @@ export function CompactFileLayout() {
         pickerAnimationFrameRef.current = null;
       }
     };
-  }, [
-    pickerFrameGeometry.left,
-    pickerFrameGeometry.radius,
-    pickerFrameGeometry.scaleX,
-    pickerFrameGeometry.scaleY,
-    pickerFrameGeometry.top,
-  ]);
+  }, [pickerFrameGeometry]);
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-transparent text-text-primary">

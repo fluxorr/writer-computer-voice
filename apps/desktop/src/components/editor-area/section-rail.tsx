@@ -44,6 +44,24 @@ function buildHeadingLink(heading: DocumentHeading) {
   return `[${heading.text}](#${heading.slug})`;
 }
 
+function handleContextMenu(event: React.MouseEvent, heading: DocumentHeading) {
+  event.preventDefault();
+  event.stopPropagation();
+  void showNativeContextMenu(
+    [
+      {
+        kind: "item",
+        id: "copy-heading-link",
+        text: "Copy heading link",
+        action: () => {
+          void writeText(buildHeadingLink(heading));
+        },
+      },
+    ],
+    { x: event.clientX, y: event.clientY },
+  );
+}
+
 export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailProps) {
   const headings = useDocumentHeadings(filePath);
   const { activeIndex } = useActiveHeadings(view, scrollContainerRef, headings);
@@ -75,24 +93,6 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
     scrollToHeading(view, scroller, heading);
   };
 
-  const handleContextMenu = (event: React.MouseEvent, heading: DocumentHeading) => {
-    event.preventDefault();
-    event.stopPropagation();
-    void showNativeContextMenu(
-      [
-        {
-          kind: "item",
-          id: "copy-heading-link",
-          text: "Copy heading link",
-          action: () => {
-            void writeText(buildHeadingLink(heading));
-          },
-        },
-      ],
-      { x: event.clientX, y: event.clientY },
-    );
-  };
-
   if (headings.length === 0) return null;
 
   const tickStackHeight =
@@ -118,7 +118,7 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
           fadeSize="48px"
           className="pointer-events-none absolute left-0 right-0 top-1/2 h-[70vh] -translate-y-1/2 overflow-hidden"
         >
-          <div
+          <nav
             className="section-rail-ticks absolute top-1/2 flex flex-col"
             data-open={isOpen ? "true" : "false"}
             style={{
@@ -129,7 +129,6 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
               pointerEvents: "none",
             }}
             aria-label="Document sections"
-            role="navigation"
           >
             {headings.map((heading, i) => {
               const isActive = i === activeIndex;
@@ -149,13 +148,14 @@ export function SectionRail({ filePath, view, scrollContainerRef }: SectionRailP
                   className="section-rail-tick block cursor-default border-0 bg-transparent p-0"
                   style={tickStyle}
                   title={heading.text}
+                  aria-label={heading.text}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => handleTickClick(heading)}
                   onContextMenu={(event) => handleContextMenu(event, heading)}
                 />
               );
             })}
-          </div>
+          </nav>
         </ScrollFade>
       </div>
 

@@ -6,6 +6,14 @@ interface FrontmatterPanelProps {
   filePath: string;
 }
 
+// Stable module-scope ref callback. A stable ref runs only on mount/unmount
+// (never per-render), so this focuses the key input exactly once when a
+// placeholder row mounts — matching the previous `autoFocus` behavior without
+// the disruptive attribute.
+function focusOnMount(el: HTMLInputElement | null) {
+  el?.focus();
+}
+
 interface FrontmatterRowProps {
   entry: YamlEntry;
   index: number;
@@ -25,10 +33,10 @@ function FrontmatterRow({
 }: FrontmatterRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
 
-  // Autofocus the key input only for placeholder rows — i.e. a seeded empty row
-  // on fresh panel mount, or a new row appended via Add Property. React evaluates
-  // `autoFocus` on input mount; committed rows keep the prop false and never
-  // steal focus on re-renders.
+  // Focus the key input only for placeholder rows — i.e. a seeded empty row on
+  // fresh panel mount, or a new row appended via Add Property. The stable
+  // `focusOnMount` ref runs only on input mount; committed rows pass no focusing
+  // ref and never steal focus on re-renders.
   const isPlaceholder = entry.key === "" && entry.value === "";
 
   // Blurs that move focus to another field in the same row (Tab from key to
@@ -50,11 +58,12 @@ function FrontmatterRow({
       <input
         data-field="key"
         type="text"
+        aria-label="Property name"
         value={entry.key}
         onChange={(e) => onUpdate(index, "key", e.target.value)}
         onKeyDown={(e) => onKeyDown(e, index, "key")}
         onBlur={handleBlur}
-        autoFocus={isPlaceholder}
+        ref={isPlaceholder ? focusOnMount : undefined}
         placeholder="key"
         spellCheck={false}
         className="w-36 shrink-0 bg-transparent text-[13px] leading-[1.15] text-[var(--text-muted)] outline-none placeholder:text-[var(--text-muted)] placeholder:opacity-70"
@@ -63,6 +72,7 @@ function FrontmatterRow({
       <input
         data-field="value"
         type="text"
+        aria-label="Property value"
         value={entry.value}
         onChange={(e) => onUpdate(index, "value", e.target.value)}
         onKeyDown={(e) => onKeyDown(e, index, "value")}
@@ -102,7 +112,7 @@ export function FrontmatterPanel({ filePath }: FrontmatterPanelProps) {
       if (e.key === "Enter" && field === "value" && index === entries.length - 1) {
         e.preventDefault();
         addEntry();
-        // autoFocus on the newly-mounted empty row handles focus — no RAF needed.
+        // focusOnMount on the newly-mounted empty row handles focus — no RAF needed.
         return;
       }
       if (e.key === "Backspace" && entries[index]?.key === "" && entries[index]?.value === "") {
@@ -120,7 +130,7 @@ export function FrontmatterPanel({ filePath }: FrontmatterPanelProps) {
       <div className="flex flex-col gap-1.5">
         {entries.map((entry, index) => (
           <FrontmatterRow
-            key={index}
+            key={entry.id}
             entry={entry}
             index={index}
             onUpdate={updateEntry}

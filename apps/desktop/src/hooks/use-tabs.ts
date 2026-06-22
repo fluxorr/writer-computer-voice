@@ -1,5 +1,4 @@
 import { createSettingsTab, useEditorStore } from "@/stores/editor-store";
-import { locationBehavior } from "@/components/editor-area/page-kinds";
 import type { DocumentStats } from "@/lib/document-stats";
 
 export type { OpenFile, Tab, Location, FileLocation, SessionTab } from "@/stores/editor-store";
@@ -8,14 +7,6 @@ const EMPTY_STATS: DocumentStats = { words: 0, characters: 0, paragraphs: 0 };
 
 export function useOpenTabs() {
   return useEditorStore((s) => s.tabs);
-}
-
-export function useTabOrder() {
-  return useEditorStore((s) => s.tabs.map((tab) => tab.id));
-}
-
-export function useTabCount() {
-  return useEditorStore((s) => s.tabs.length);
 }
 
 export function useOpenFiles() {
@@ -42,50 +33,16 @@ export function useFileContent(path: string | null) {
   return useEditorStore((s) => (path ? s.openFiles.get(path)?.content : undefined) ?? "");
 }
 
-export function useFileFrontmatter(path: string | null) {
-  return useEditorStore((s) => (path ? s.openFiles.get(path)?.frontmatter : undefined) ?? null);
-}
-
-export function useFileDisplayDate(path: string | null) {
-  return useEditorStore((s) => (path ? s.openFiles.get(path)?.displayDate : undefined) ?? null);
-}
-
 export function useFileStats(path: string | null) {
   return useEditorStore((s) => (path ? s.openFiles.get(path)?.stats : undefined) ?? EMPTY_STATS);
-}
-
-export function useIsActiveTabLauncher() {
-  return useEditorStore(
-    (s) => s.tabs.find((tab) => tab.id === s.activeTabId)?.location.kind === "launcher",
-  );
-}
-
-export function useEditorInstanceKey(path: string) {
-  return useEditorStore((s) => `${path}:${s.openFiles.get(path)?.reloadVersion ?? 0}`);
-}
-
-export function useActiveEditorInstanceKey() {
-  return useEditorStore((s) => {
-    const path = s.activeFilePath;
-    if (!path) return null;
-    return `${path}:${s.openFiles.get(path)?.reloadVersion ?? 0}`;
-  });
 }
 
 export function useOpenFile() {
   return useEditorStore((s) => s.openFile);
 }
 
-export function useOpenCompactFile() {
-  return useEditorStore((s) => s.openCompactFile);
-}
-
 export function useOpenNewTab() {
   return useEditorStore((s) => s.openNewTab);
-}
-
-export function useCloseFile() {
-  return useEditorStore((s) => s.closeFile);
 }
 
 export function useCloseTab() {
@@ -96,16 +53,8 @@ export function useCloseActiveTab() {
   return useEditorStore((s) => s.closeActiveTab);
 }
 
-export function useSetActiveFile() {
-  return useEditorStore((s) => s.setActiveFile);
-}
-
 export function useSetActiveTab() {
   return useEditorStore((s) => s.setActiveTab);
-}
-
-export function useNavigateToFile() {
-  return useEditorStore((s) => s.navigateToFile);
 }
 
 export function useNavigateBack() {
@@ -130,12 +79,6 @@ export function useCanNavigateForward() {
   });
 }
 
-export function useIsActiveFileLoading() {
-  return useEditorStore(
-    (s) => (s.activeFilePath ? s.openFiles.get(s.activeFilePath)?.isLoading : false) ?? false,
-  );
-}
-
 export function useIsFileLoading(path: string) {
   return useEditorStore((s) => s.openFiles.get(path)?.isLoading ?? false);
 }
@@ -148,18 +91,11 @@ export function useIsActive(path: string) {
   return useEditorStore((s) => s.activeFilePath === path);
 }
 
-export function useTabCurrentPath(tabId: string) {
-  return useEditorStore((s) => {
-    const tab = s.tabs.find((t) => t.id === tabId);
-    return tab ? locationBehavior(tab.location).primaryPath(tab.location) : null;
-  });
-}
-
 export function useReloadVersion(path: string | null) {
   return useEditorStore((s) => (path ? (s.openFiles.get(path)?.reloadVersion ?? 0) : 0));
 }
 
-export function useOpenOrFocus() {
+function useOpenOrFocus() {
   return useEditorStore((s) => s.openOrFocus);
 }
 

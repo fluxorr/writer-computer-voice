@@ -39,17 +39,18 @@ const buildDecorations = (state: EditorState) => {
 
   syntaxTree(state).iterate({
     enter: (node) => {
+      const nodeName = node.type.name;
       for (const spec of specs) {
         // Check spec
         if (spec.nodeName instanceof Function) {
-          if (!spec.nodeName(node.type.name)) {
+          if (!spec.nodeName(nodeName)) {
             continue;
           }
         } else if (spec.nodeName instanceof Array) {
-          if (!spec.nodeName.includes(node.type.name)) {
+          if (!spec.nodeName.includes(nodeName)) {
             continue;
           }
-        } else if (node.type.name !== spec.nodeName) {
+        } else if (nodeName !== spec.nodeName) {
           continue;
         }
 
@@ -97,12 +98,13 @@ const buildDecorations = (state: EditorState) => {
           } else {
             names = spec.subNodeNameToHide;
           }
+          const nameSet = new Set(names);
 
           const cursor = node.node.cursor();
 
           // Manual traversal to ensure all children are processed
           cursor.iterate((node) => {
-            if (names.includes(node.type.name)) {
+            if (nameSet.has(node.type.name)) {
               decorations.push(
                 (spec.block
                   ? hideBlockDecoration

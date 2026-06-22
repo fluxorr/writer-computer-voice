@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { SettingDef } from "@/lib/settings-schema";
 
 interface SettingControlProps {
@@ -14,6 +14,9 @@ function BooleanControl({ value, onChange }: { value: boolean; onChange: (v: boo
     <button
       type="button"
       onClick={() => onChange(!value)}
+      role="switch"
+      aria-checked={value}
+      aria-label="Toggle setting"
       className="relative h-5 w-9 rounded-full transition-colors duration-200"
       style={{
         backgroundColor: value ? "var(--link-color)" : "var(--border-color)",
@@ -32,6 +35,7 @@ function NumberControl({ value, onChange }: { value: number; onChange: (v: numbe
     <input
       type="number"
       value={value}
+      aria-label="Number value"
       onChange={(e) => {
         const n = parseFloat(e.target.value);
         if (!Number.isNaN(n)) onChange(n);
@@ -46,6 +50,7 @@ function StringControl({ value, onChange }: { value: string; onChange: (v: strin
     <input
       type="text"
       value={value}
+      aria-label="Text value"
       onChange={(e) => onChange(e.target.value)}
       className="w-64 h-9 rounded-lg border border-transparent bg-[var(--surface-input)] px-3 text-[13px] text-[var(--text-secondary)] font-[inherit] outline-none focus:border-[var(--focus-border)] focus-visible:outline-none"
     />
@@ -78,18 +83,13 @@ function EnumControl({
 
 const HEX_RE = /^#([0-9a-f]{6}|[0-9a-f]{3})$/i;
 
-export function ColorControl({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function ColorControl({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   // Local text state so the user can type intermediate invalid hex while editing.
+  // Callers key this component on `value` so an external value change remounts it
+  // and resets `text` to the new value.
+  // Intentional editable local copy: caller keys this on `value` so external changes remount and reset; local state allows typing intermediate invalid hex before commit.
+  // eslint-disable-next-line react-doctor/no-derived-useState
   const [text, setText] = useState(value);
-  useEffect(() => {
-    setText(value);
-  }, [value]);
 
   function commit(next: string) {
     if (HEX_RE.test(next)) {
@@ -118,6 +118,7 @@ export function ColorControl({
       <input
         type="text"
         value={text}
+        aria-label="Hex color value"
         onChange={(e) => setText(e.target.value)}
         onBlur={(e) => commit(e.target.value)}
         onKeyDown={(e) => {
@@ -130,7 +131,7 @@ export function ColorControl({
   );
 }
 
-export function RangeControl({
+function RangeControl({
   value,
   min,
   max,
@@ -151,6 +152,7 @@ export function RangeControl({
         max={max}
         step={step}
         value={value}
+        aria-label="Range value"
         onChange={(e) => onChange(Number(e.target.value))}
         className="h-1 w-44 appearance-none rounded-full bg-[var(--surface-subtle)] accent-[var(--accent)] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow"
       />
@@ -179,10 +181,12 @@ function ListControl({ value, onChange }: { value: string[]; onChange: (v: strin
   return (
     <div className="flex flex-col items-end gap-1.5">
       {value.map((item, i) => (
+        // eslint-disable-next-line react-doctor/no-array-index-as-key -- positional string[] (may be empty/duplicated) bound to controlled inputs by position; a value-derived key would collide on dupes and remount inputs on each keystroke.
         <div key={i} className="flex items-center gap-1">
           <input
             type="text"
             value={item}
+            aria-label={`List item ${i + 1}`}
             onChange={(e) => handleChange(i, e.target.value)}
             className="h-9 w-64 rounded-lg border border-transparent bg-[var(--surface-input)] px-3 text-[13px] text-[var(--text-secondary)] font-[inherit] outline-none focus:border-[var(--focus-border)] focus-visible:outline-none"
           />
@@ -210,7 +214,7 @@ function ListControl({ value, onChange }: { value: string[]; onChange: (v: strin
 /** Dispatch a control widget for a SettingDef. The single switch keeps the
  *  schema → control mapping centralized; any view rendering settings should
  *  use this rather than re-implementing the type dispatch. */
-export function Control({
+function Control({
   def,
   value,
   onChange,
@@ -233,7 +237,7 @@ export function Control({
     case "list":
       return <ListControl value={(value as string[]) ?? []} onChange={onChange} />;
     case "color":
-      return <ColorControl value={value as string} onChange={onChange} />;
+      return <ColorControl key={value as string} value={value as string} onChange={onChange} />;
     case "range":
       return (
         <RangeControl
@@ -260,7 +264,6 @@ export function SettingControl({ def, value, onChange, onReset, isModified }: Se
         <button
           type="button"
           onClick={onReset}
-          aria-hidden={!isModified}
           tabIndex={isModified ? 0 : -1}
           className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-subtle-strong)] hover:text-[var(--text-primary)] ${
             isModified ? "" : "invisible pointer-events-none"
