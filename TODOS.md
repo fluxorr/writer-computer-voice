@@ -2,6 +2,7 @@
 
 ## In Progress
 
+- Voice: read-aloud (TTS) + dictation (STT): [`SPECs/voice-read-aloud-dictation-spec.md`](SPECs/voice-read-aloud-dictation-spec.md) — macOS-only, offline. Read-aloud via native `AVSpeechSynthesizer` with word highlight + mini-player (`Cmd+Shift+R`); dictation via `whisper-rs` (Metal, small model, auto-download) streaming at cursor (`Cmd+Shift+D`), fallback native Dictation. Worksheet: [`SPECs/Agent/worksheet-voice-read-aloud-dictation.md`](SPECs/Agent/worksheet-voice-read-aloud-dictation.md).
 - Reveal-in-sidebar + residual external-watcher misses: [`SPECs/reveal-in-sidebar-and-external-watcher-spec.md`](SPECs/reveal-in-sidebar-and-external-watcher-spec.md) — keep the explicit tab-context-menu "Reveal in sidebar" action working, leave ordinary file opens from expanding the Everything tree, and characterize the remaining external-file-watcher miss cases through a logging + manual-repro pass before patching further.
 
 ## Done
