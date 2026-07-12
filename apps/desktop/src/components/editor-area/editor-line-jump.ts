@@ -3,7 +3,7 @@
 // but targets a line + character ranges instead of a heading slug.
 
 import { EditorView, Decoration } from "@codemirror/view";
-import { StateField, StateEffect, EditorSelection } from "@codemirror/state";
+import { StateField, StateEffect, EditorSelection, type Extension } from "@codemirror/state";
 import { EDITOR_SAFE_SCROLL_MARGIN } from "./editor-scroll-container";
 
 const lineJumpEffect = StateEffect.define<Array<{ from: number; to: number }> | null>();
@@ -101,4 +101,7 @@ export function applyLineJump(view: EditorView, lineNumber: number, ranges: [num
   scheduleClearLineJump(view);
 }
 
-export { lineJumpDecorations };
+// Combined extension: register the highlight StateField AND derive the
+// decoration from it. The StateField must be present in the editor state or
+// `state.field(lineJumpState)` throws "Field is not present in this state".
+export const lineJumpExtension: Extension = [lineJumpState, lineJumpDecorations];

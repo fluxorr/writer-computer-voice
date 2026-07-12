@@ -72,7 +72,7 @@ import {
 } from "@/lib/paths";
 import { consumePendingAnchor, setPendingAnchor } from "@/lib/pending-anchor";
 import { consumePendingLineJump } from "@/lib/pending-line-jump";
-import { applyLineJump, lineJumpDecorations } from "./editor-line-jump";
+import { applyLineJump, lineJumpExtension } from "./editor-line-jump";
 import { logTimeline, mark } from "@/lib/startup-metrics";
 import * as tauri from "@/lib/tauri";
 import { showAnchorWarning } from "./anchor-warning-store";
@@ -606,7 +606,7 @@ function createEditorExtensions(
     htmlBlockDecorations(),
     mermaidDecorations(),
     headingDecorations,
-    lineJumpDecorations,
+    lineJumpExtension,
     imageSrcResolver(getFilePath),
     wikiLinkExtension(getFilePath, isDisposed),
     markdownFormatting,
