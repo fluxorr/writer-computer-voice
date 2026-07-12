@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type {
+  ContentMatch,
   DirEntry,
   FileContent,
   IndexStats,
@@ -184,6 +185,15 @@ export function indexWorkspace(): Promise<IndexStats> {
 
 export function fuzzySearch(query: string, limit?: number): Promise<SearchResult[]> {
   return invoke("fuzzy_search", { query, limit });
+}
+
+// Content (full-text) search across the workspace. `query` prefixed with "/"
+// switches to literal grep mode; otherwise it's a fuzzy token search.
+export function searchWorkspaceContent(
+  query: string,
+  options?: { limitPerFile?: number; limitTotal?: number },
+): Promise<ContentMatch[]> {
+  return invoke("search_workspace_content", { query, options: options ?? null });
 }
 
 // Settings commands

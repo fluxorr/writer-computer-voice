@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-12
+
+- Full-content search across the workspace. Press `Cmd+Shift+F` (or the search-in-files button in the sidebar) to open a palette that scans every gitignored-indexed markdown file and returns matching lines, grouped by file with the matched characters highlighted. Typing a query runs a fuzzy match (all space-separated tokens must appear in a line, ranked by heading, proximity, and filename); prefix the query with `/` for a literal, case-insensitive grep of every occurrence. Selecting a result opens the file and scrolls to the line with a brief highlight. Reuses the existing file index for a live scan (no new dependency); results are debounced and capped (10 per file, 500 total).
+
 ## 2026-06-22
 
 - Code-health pass across the desktop app and marketing site (now scoring 100/100 on React Doctor). Mostly internal, with a few user-relevant effects: more screen-reader labels on editor and settings controls, semantic landmarks in the editor chrome, a lighter backdrop blur on the anchor-warning banner, and DOMPurify sanitization of rendered Mermaid diagram SVG. Also broke several module import cycles (notably by splitting page-kind views from their behavior so the stores no longer pull in the editor UI), removed unused dependencies (`motion`, `react-resizable-panels`) and dead code, and parallelized a few independent file reads.

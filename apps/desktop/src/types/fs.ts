@@ -32,11 +32,13 @@ export interface SearchResult {
   match_indices: number[];
 }
 
-export interface ContentSearchResult {
+export interface ContentMatch {
   path: string;
+  relative_path: string;
   line_number: number;
-  line_content: string;
+  line_text: string;
   match_ranges: [number, number][];
+  score: number;
 }
 
 export interface IndexStats {

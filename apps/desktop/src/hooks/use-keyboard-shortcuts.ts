@@ -20,7 +20,7 @@ export function useKeyboardShortcuts() {
       const mod = e.metaKey || e.ctrlKey;
 
       // Read current state at event time
-      const { openCommandPalette } = useUIStore.getState();
+      const { openCommandPalette, openContentSearch } = useUIStore.getState();
       const { root, chromeMode } = useWorkspaceStore.getState();
       const {
         tabs,
@@ -81,6 +81,13 @@ export function useKeyboardShortcuts() {
       if (mod && e.key === "o") {
         e.preventDefault();
         if (root) openCommandPalette("search");
+        return;
+      }
+
+      // Cmd+Shift+F — search file contents across the workspace
+      if (mod && e.shiftKey && (e.key === "f" || e.key === "F")) {
+        e.preventDefault();
+        if (root) openContentSearch();
         return;
       }
 

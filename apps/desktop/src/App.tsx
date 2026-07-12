@@ -1,5 +1,6 @@
 import { AppLayout } from "./components/app-layout";
 import { CommandPalette } from "./components/command-palette";
+import { ContentSearchPalette } from "./components/content-search-palette";
 import { WelcomeScreen } from "./components/welcome";
 import { WindowTitle } from "./components/window-title";
 import { useWorkspace, useIsStartupResolved } from "./hooks/use-workspace";
@@ -40,6 +41,7 @@ function App() {
       <WindowTitle />
       <AppLayout />
       <CommandPalette />
+      <ContentSearchPalette />
     </>
   );
 }

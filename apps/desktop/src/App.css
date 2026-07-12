@@ -443,3 +443,19 @@ body.tree-dragging [data-tree-path] {
   font-size: 13px;
   color: var(--text-muted);
 }
+
+/* Content-search match highlight in the editor body — a brief, accent-tinted
+   mark that clears itself after a couple seconds. */
+.cm-content-search-highlight {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  border-radius: 3px;
+  transition: background 600ms ease-out;
+}
+
+/* Inline match highlight inside the content-search palette results. */
+.cm-content-search-highlight-inline {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}

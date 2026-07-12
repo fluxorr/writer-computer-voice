@@ -229,6 +229,253 @@ pub fn fuzzy_search_impl(query: &str, index: &[IndexedFile], limit: usize) -> Ve
     fuzzy_search_from(query, index, limit).unwrap_or_default()
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ContentMatch {
+    pub path: String,
+    pub relative_path: String,
+    pub line_number: u32,
+    /// Snippet of the matched line (capped; see `cap_line`). Char-based.
+    pub line_text: String,
+    /// Match ranges within `line_text`, as `[start, end)` char indices.
+    pub match_ranges: Vec<[u32; 2]>,
+    pub score: u32,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ContentSearchOptions {
+    pub limit_per_file: Option<u32>,
+    pub limit_total: Option<u32>,
+}
+
+#[tauri::command]
+pub fn search_workspace_content(
+    query: String,
+    options: Option<ContentSearchOptions>,
+    webview: tauri::Webview,
+    app: tauri::AppHandle,
+) -> Result<Vec<ContentMatch>, AppError> {
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let state = app.state::<AppState>().get_or_create(webview.label());
+    // `file_index` is already gitignore-filtered by the indexer, so content
+    // search automatically honors the same ignore rules as the file tree.
+    let index = state.file_index.read().clone();
+    let opts = options.unwrap_or(ContentSearchOptions {
+        limit_per_file: None,
+        limit_total: None,
+    });
+
+    Ok(search_workspace_content_impl(&query, &index, &opts))
+}
+
+fn search_workspace_content_impl(
+    query: &str,
+    index: &[IndexedFile],
+    opts: &ContentSearchOptions,
+) -> Vec<ContentMatch> {
+    // Grep mode: query prefixed with `/` matches the literal remainder.
+    let grep_mode = query.starts_with('/');
+    let raw = if grep_mode { &query[1..] } else { query };
+    if raw.trim().is_empty() {
+        return Vec::new();
+    }
+
+    let limit_per_file = opts.limit_per_file.unwrap_or(10) as usize;
+    let limit_total = opts.limit_total.unwrap_or(500) as usize;
+
+    // Fuzzy mode tokenizes the query into whitespace-separated, lowercased
+    // tokens; a line matches when it contains every token.
+    let tokens: Vec<String> = if grep_mode {
+        Vec::new()
+    } else {
+        raw.to_lowercase()
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    };
+    let grep_needle = if grep_mode {
+        raw.to_lowercase()
+    } else {
+        String::new()
+    };
+
+    // Parallel read + match across files, bounded to the available cores.
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get().min(8))
+        .unwrap_or(4);
+    let chunk_size = (index.len() / threads).max(1);
+    let collected: Arc<Mutex<Vec<ContentMatch>>> = Arc::new(Mutex::new(Vec::new()));
+
+    std::thread::scope(|scope| {
+        for file_chunk in index.chunks(chunk_size) {
+            let collected = Arc::clone(&collected);
+            let tokens = tokens.clone();
+            let grep_needle = grep_needle.clone();
+            scope.spawn(move || {
+                let mut local = Vec::new();
+                for file in file_chunk {
+                    if let Some(mut matches) =
+                        search_file_content(file, grep_mode, &tokens, &grep_needle)
+                    {
+                        matches.truncate(limit_per_file);
+                        local.extend(matches);
+                    }
+                }
+                collected.lock().extend(local);
+            });
+        }
+    });
+
+    let mut all = Arc::try_unwrap(collected).unwrap().into_inner();
+    // Higher score ranks first; relevance beats recency.
+    all.sort_by(|a, b| b.score.cmp(&a.score));
+    all.truncate(limit_total);
+    all
+}
+
+fn search_file_content(
+    file: &IndexedFile,
+    grep_mode: bool,
+    tokens: &[String],
+    grep_needle: &str,
+) -> Option<Vec<ContentMatch>> {
+    let content = std::fs::read_to_string(&file.path).ok()?;
+    let stem = file.name.trim_end_matches(".md").to_lowercase();
+
+    let mut matches = Vec::new();
+    for (i, line) in content.lines().enumerate() {
+        let line_number = (i + 1) as u32;
+        let line_lower = line.to_lowercase();
+
+        // A non-matching line is skipped; only lines with a match become
+        // results. `?` would bail the whole file on the first miss.
+        let (ranges, score) = if grep_mode {
+            let Some(ranges) = grep_ranges(&line_lower, grep_needle) else {
+                continue;
+            };
+            let score = 1_000u32 * (ranges.len() as u32)
+                + heading_bonus(line)
+                + early_line_bonus(line_number);
+            (ranges, score)
+        } else {
+            let Some(ranges) = fuzzy_ranges(&line_lower, tokens) else {
+                continue;
+            };
+            let mut score = 1_000u32 * (ranges.len() as u32).min(tokens.len() as u32);
+            score += heading_bonus(line);
+            score += early_line_bonus(line_number);
+            // Tokens close together in the same line are more relevant.
+            if ranges.len() > 1 {
+                let span = ranges[ranges.len() - 1][1] - ranges[0][0];
+                if span <= 40 {
+                    score += 20_000;
+                }
+            }
+            // Filename-stem match is a secondary tiebreaker.
+            if tokens.iter().all(|t| stem.contains(t.as_str())) {
+                score += 50_000;
+            }
+            (ranges, score)
+        };
+
+        let line_text = cap_line(line);
+        let match_ranges = clamp_ranges(&ranges, line_text.chars().count());
+
+        matches.push(ContentMatch {
+            path: file.path.to_string_lossy().to_string(),
+            relative_path: file.relative_path.clone(),
+            line_number,
+            line_text,
+            match_ranges,
+            score,
+        });
+    }
+
+    if matches.is_empty() {
+        None
+    } else {
+        Some(matches)
+    }
+}
+
+/// All case-insensitive literal occurrences of `needle` in `line`, as
+/// `[start, end)` char ranges. Returns `None` when there is no match.
+fn grep_ranges(line: &str, needle: &str) -> Option<Vec<[u32; 2]>> {
+    if needle.is_empty() {
+        return None;
+    }
+    let mut ranges = Vec::new();
+    let mut pos = 0;
+    while let Some(byte_start) = line[pos..].find(needle) {
+        let abs = pos + byte_start;
+        let start = line[..abs].chars().count();
+        let end = start + needle.chars().count();
+        ranges.push([start as u32, end as u32]);
+        pos = abs + needle.len().max(1);
+    }
+    if ranges.is_empty() {
+        None
+    } else {
+        Some(ranges)
+    }
+}
+
+/// First case-insensitive occurrence of every token in `line`, as
+/// `[start, end)` char ranges. Returns `None` if any token is missing.
+fn fuzzy_ranges(line: &str, tokens: &[String]) -> Option<Vec<[u32; 2]>> {
+    if tokens.is_empty() {
+        return None;
+    }
+    let mut ranges = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let byte_start = line.find(token.as_str())?;
+        let start = line[..byte_start].chars().count();
+        let end = start + token.chars().count();
+        ranges.push([start as u32, end as u32]);
+    }
+    Some(ranges)
+}
+
+fn heading_bonus(line: &str) -> u32 {
+    if line.trim_start().starts_with('#') {
+        1_000_000
+    } else {
+        0
+    }
+}
+
+fn early_line_bonus(line_number: u32) -> u32 {
+    1_000u32.saturating_sub(line_number.min(1_000))
+}
+
+/// Cap a line snippet so serialization stays bounded; the highlight ranges
+/// are clamped to the capped text by the caller.
+fn cap_line(line: &str) -> String {
+    let char_count = line.chars().count();
+    if char_count > 1_000 {
+        line.chars().take(1_000).collect()
+    } else {
+        line.to_string()
+    }
+}
+
+/// Drop ranges (or their ends) that fall outside the capped `line_text`.
+fn clamp_ranges(ranges: &[[u32; 2]], max: usize) -> Vec<[u32; 2]> {
+    ranges
+        .iter()
+        .filter_map(|[start, end]| {
+            if *start >= max as u32 {
+                return None;
+            }
+            let end = (*end).min(max as u32);
+            Some([*start, end])
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -341,5 +588,78 @@ mod tests {
         let (index, _dirs) = index_workspace_test(dir.path());
         let results = fuzzy_search_impl("md", &index, 1);
         assert!(results.len() <= 1);
+    }
+
+    #[test]
+    fn test_content_search_fuzzy_finds_body() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("notes.md"),
+            "# Title\nThe quick brown fox jumps\n",
+        )
+        .unwrap();
+        let (index, _dirs) = index_workspace_test(dir.path());
+        let results = search_workspace_content_impl("quick brown", &index, &ContentSearchOptions { limit_per_file: None, limit_total: None });
+        assert!(!results.is_empty());
+        assert!(results[0].relative_path.contains("notes.md"));
+        assert_eq!(results[0].line_number, 2);
+        assert!(!results[0].match_ranges.is_empty());
+    }
+
+    #[test]
+    fn test_content_search_grep_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("notes.md"),
+            "# Title\nThe quick brown fox jumps\n",
+        )
+        .unwrap();
+        let (index, _dirs) = index_workspace_test(dir.path());
+        let results = search_workspace_content_impl("/quick brown", &index, &ContentSearchOptions { limit_per_file: None, limit_total: None });
+        assert!(!results.is_empty());
+        assert_eq!(results[0].line_number, 2);
+        assert_eq!(results[0].match_ranges.len(), 1);
+    }
+
+    #[test]
+    fn test_content_search_empty_query() {
+        let dir = setup_workspace();
+        let (index, _dirs) = index_workspace_test(dir.path());
+        assert!(search_workspace_content_impl("", &index, &ContentSearchOptions { limit_per_file: None, limit_total: None }).is_empty());
+        // Bare "/" strips to empty after the grep prefix.
+        assert!(search_workspace_content_impl("/", &index, &ContentSearchOptions { limit_per_file: None, limit_total: None }).is_empty());
+    }
+
+    #[test]
+    fn test_content_search_respects_per_file_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut body = String::from("# Heading\n");
+        for i in 0..20 {
+            body.push_str(&format!("needle line number {i}\n"));
+        }
+        fs::write(dir.path().join("notes.md"), body).unwrap();
+        let (index, _dirs) = index_workspace_test(dir.path());
+        let results = search_workspace_content_impl(
+            "needle",
+            &index,
+            &ContentSearchOptions {
+                limit_per_file: Some(5),
+                limit_total: None,
+            },
+        );
+        // 5 capped per file, all from the single notes.md.
+        assert_eq!(results.len(), 5);
+        assert!(results.iter().all(|m| m.relative_path.contains("notes.md")));
+    }
+
+    #[test]
+    fn test_grep_ranges_finds_all_occurrences() {
+        let ranges = grep_ranges("foo and foo and foo", "foo").unwrap();
+        assert_eq!(ranges.len(), 3);
+    }
+
+    #[test]
+    fn test_fuzzy_ranges_missing_token_is_none() {
+        assert!(fuzzy_ranges("the cat sat", &["cat".to_string(), "dog".to_string()]).is_none());
     }
 }

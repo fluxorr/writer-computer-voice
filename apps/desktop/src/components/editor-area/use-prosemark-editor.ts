@@ -71,6 +71,8 @@ import {
   resolveLinkTarget,
 } from "@/lib/paths";
 import { consumePendingAnchor, setPendingAnchor } from "@/lib/pending-anchor";
+import { consumePendingLineJump } from "@/lib/pending-line-jump";
+import { applyLineJump, lineJumpDecorations } from "./editor-line-jump";
 import { logTimeline, mark } from "@/lib/startup-metrics";
 import * as tauri from "@/lib/tauri";
 import { showAnchorWarning } from "./anchor-warning-store";
@@ -604,6 +606,7 @@ function createEditorExtensions(
     htmlBlockDecorations(),
     mermaidDecorations(),
     headingDecorations,
+    lineJumpDecorations,
     imageSrcResolver(getFilePath),
     wikiLinkExtension(getFilePath, isDisposed),
     markdownFormatting,
@@ -803,7 +806,15 @@ export function useProsemarkEditor(
             showAnchorWarning(`Heading "#${pendingAnchor}" not found in ${getFileName(filePath)}`);
           }
         } else {
-          restoreScrollPosition(scrollContainer, file?.scrollPos ?? 0, () => disposedRef.current);
+          const pendingJump = consumePendingLineJump(filePath);
+          if (pendingJump) {
+            requestAnimationFrame(() => {
+              if (disposedRef.current) return;
+              applyLineJump(view, pendingJump.line, pendingJump.ranges);
+            });
+          } else {
+            restoreScrollPosition(scrollContainer, file?.scrollPos ?? 0, () => disposedRef.current);
+          }
         }
       }
     }

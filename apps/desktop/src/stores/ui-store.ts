@@ -7,15 +7,22 @@ interface UIState {
   commandPaletteIntent: CommandPaletteIntent;
   commandPaletteSearch: string;
 
+  isContentSearchOpen: boolean;
+
   openCommandPalette: (intent?: CommandPaletteIntent) => void;
   closeCommandPalette: () => void;
   setCommandPaletteSearch: (search: string) => void;
+
+  openContentSearch: () => void;
+  closeContentSearch: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
   isCommandPaletteOpen: false,
   commandPaletteIntent: "search",
   commandPaletteSearch: "",
+
+  isContentSearchOpen: false,
 
   openCommandPalette: (intent = "search") =>
     set({ isCommandPaletteOpen: true, commandPaletteIntent: intent, commandPaletteSearch: "" }),
@@ -26,4 +33,7 @@ export const useUIStore = create<UIState>((set) => ({
       commandPaletteSearch: "",
     }),
   setCommandPaletteSearch: (search: string) => set({ commandPaletteSearch: search }),
+
+  openContentSearch: () => set({ isContentSearchOpen: true, isCommandPaletteOpen: false }),
+  closeContentSearch: () => set({ isContentSearchOpen: false }),
 }));

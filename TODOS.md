@@ -44,6 +44,7 @@
 - Heading anchor links: [`SPECs/heading-anchor-links-spec.md`](SPECs/heading-anchor-links-spec.md) — GFM slugger, same-doc smooth scroll, cross-doc navigate+scroll, inline warning on unresolved anchors.
 - Section indicators: [`SPECs/section-indicators-spec.md`](SPECs/section-indicators-spec.md) — left-edge rail of heading ticks with active-heading tracking, hover outline popover, click-to-scroll, and right-click `Copy heading link`.
 - Mermaid drag-selection edit-mode flip: [`SPECs/mermaid-drag-selection-edit-mode-flip-spec.md`](SPECs/mermaid-drag-selection-edit-mode-flip-spec.md) — freeze `editMode` for the duration of a pointer drag-selection so the widget doesn't flip into source view mid-drag.
+- Fuzzy content search and grep: [`SPECs/fuzzy-search-grep-spec.md`](SPECs/fuzzy-search-grep-spec.md) — add full-content fuzzy search + grep across the workspace (`Cmd+Shift+F`), reusing the gitignore-filtered `file_index` for a live scan. Worksheet: [`SPECs/Agent/worksheet-fuzzy-search-grep.md`](SPECs/Agent/worksheet-fuzzy-search-grep.md).
 
 ## Up Next
 
@@ -55,7 +56,6 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 
 #### Content features
 
-- [ ] Fuzzy content search and grep: [`SPECs/fuzzy-search-grep-spec.md`](SPECs/fuzzy-search-grep-spec.md)
 - [ ] Tags: [`SPECs/tags-spec.md`](SPECs/tags-spec.md)
 - [ ] New tab recent files: [`SPECs/new-tab-recent-files-spec.md`](SPECs/new-tab-recent-files-spec.md)
 - [ ] Document date display: [`SPECs/document-date-display-spec.md`](SPECs/document-date-display-spec.md)

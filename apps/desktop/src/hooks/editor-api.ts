@@ -1,5 +1,8 @@
 import { useEditorStore } from "@/stores/editor-store";
 export type { OpenFile, Tab, SessionTab } from "@/stores/editor-store";
+import { applyLineJump } from "@/components/editor-area/editor-line-jump";
+import { getEditorView } from "@/lib/editor-view-registry";
+import { setPendingLineJump } from "@/lib/pending-line-jump";
 
 export function getOpenFile(path: string) {
   return useEditorStore.getState().openFiles.get(path) ?? null;
@@ -67,4 +70,17 @@ export function removePathsWithPrefix(prefix: string) {
 
 export function rewritePathPrefix(oldPrefix: string, newPrefix: string) {
   useEditorStore.getState().rewritePathPrefix(oldPrefix, newPrefix);
+}
+
+// Jump to a line + highlighted char ranges in a file. If the file is already
+// open, highlight + scroll its live editor view directly; otherwise stash a
+// pending jump and navigate so the editor consumes it on swap.
+export function jumpToLine(path: string, lineNumber: number, ranges: [number, number][]) {
+  const view = getEditorView(path);
+  if (view) {
+    applyLineJump(view, lineNumber, ranges);
+  } else {
+    setPendingLineJump(path, { line: lineNumber, ranges });
+    void navigateToFile(path);
+  }
 }
