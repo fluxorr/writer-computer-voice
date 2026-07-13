@@ -3,6 +3,7 @@
 ## 2026-07-13
 
 - Voice read-aloud (TTS). A new Voice settings category controls the TTS voice, rate, pitch, and read scope (cursor / selection / document); the chosen scope is remembered between uses. Trigger read-aloud from the command palette ("Read Aloud") or the `Cmd+Shift+R` shortcut (remappable in settings). While speaking, a small mini-player offers play/pause, stop, a scope switch, and a speed slider, and the currently-spoken word is highlighted in the editor (karaoke) and scrolled into view. On macOS the WebView's Web Speech API uses the system's offline voices, so read-aloud stays local-first.
+- Voice dictation (STT). A new dictation backend runs Whisper locally (whisper.cpp via whisper-rs, Metal on macOS) with no cloud dependency; the model (default `base.en`) auto-downloads to app data on first use and shows a progress bar while fetching. Start dictation from the command palette ("Start Dictation") or the `Cmd+Shift+D` shortcut (remappable). While listening, recognized text streams live into a bottom indicator and is inserted at the cursor when you stop. Microphone access uses the `com.apple.security.device.audio-input` entitlement plus an `NSMicrophoneUsageDescription` prompt.
 
 ## 2026-07-12
 

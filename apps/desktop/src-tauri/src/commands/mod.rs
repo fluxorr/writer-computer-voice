@@ -6,4 +6,6 @@ pub mod settings;
 #[cfg(target_os = "macos")]
 pub mod shell_install;
 pub mod startup;
+#[cfg(target_os = "macos")]
+pub mod voice;
 pub mod workspace;

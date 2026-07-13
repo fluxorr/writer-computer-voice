@@ -2,6 +2,7 @@ import { AppLayout } from "./components/app-layout";
 import { CommandPalette } from "./components/command-palette";
 import { ContentSearchPalette } from "./components/content-search-palette";
 import { VoiceTtsMiniplayer } from "./components/voice-tts-miniplayer";
+import { VoiceSttIndicator } from "./components/voice-stt-indicator";
 import { WelcomeScreen } from "./components/welcome";
 import { WindowTitle } from "./components/window-title";
 import { useWorkspace, useIsStartupResolved } from "./hooks/use-workspace";
@@ -44,6 +45,7 @@ function App() {
       <CommandPalette />
       <ContentSearchPalette />
       <VoiceTtsMiniplayer />
+      <VoiceSttIndicator />
     </>
   );
 }

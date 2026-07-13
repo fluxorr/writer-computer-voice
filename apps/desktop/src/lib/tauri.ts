@@ -261,3 +261,44 @@ export function saveClipboardImage(
 ): Promise<{ relative_path: string; absolute_path: string }> {
   return invoke("save_clipboard_image", { markdownFilePath, imageData, format });
 }
+
+// ---------- Voice: dictation (STT) ----------
+
+export type VoiceSttModelStatus =
+  | { status: "idle" }
+  | { status: "downloading"; downloaded: number; total: number }
+  | { status: "ready" }
+  | { status: "error"; message: string };
+
+export interface VoiceSttPartial {
+  text: string;
+}
+
+export interface VoiceSttFinal {
+  text: string;
+}
+
+export interface VoiceSttStatus {
+  status: "listening" | "idle" | "error";
+  message?: string;
+}
+
+/** Download the whisper model if missing. Progress arrives via the
+ *  `voice-stt-model` event. */
+export function voiceSttEnsureModel(model: string): Promise<void> {
+  return invoke("voice_stt_ensure_model", { model });
+}
+
+/** Begin microphone capture + streaming transcription. */
+export function voiceSttStart(
+  model: string,
+  language: string,
+  autopunctuate: boolean,
+): Promise<void> {
+  return invoke("voice_stt_start", { model, language, autopunctuate });
+}
+
+/** Stop capture and emit the final transcript. */
+export function voiceSttStop(): Promise<void> {
+  return invoke("voice_stt_stop");
+}

@@ -40,6 +40,11 @@ tauri-plugin-webdriver = { version = "0.2", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.4"
+whisper-rs = "0.12"
+cpal = "0.15"
+rubato = "0.14"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
+futures-util = "0.3"
 
 [features]
 # Embeds a W3C WebDriver server in the app for local E2E testing with

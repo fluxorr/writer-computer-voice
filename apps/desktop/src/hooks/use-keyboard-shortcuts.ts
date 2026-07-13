@@ -5,6 +5,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { toggleSidebar } from "@/hooks/use-sidebar";
 import { getWorkspaceChromeMode } from "@/lib/compact-mode";
 import { useVoiceTtsStore } from "@/lib/voice-tts";
+import { useVoiceSttStore } from "@/hooks/use-voice-stt";
 import { useSettingsStore } from "@/stores/settings-store";
 
 /** Match a stored shortcut string (e.g. "Cmd+Shift+R") against a key event. */
@@ -124,6 +125,16 @@ export function useKeyboardShortcuts() {
         if (matchesShortcut(e, readShortcut)) {
           e.preventDefault();
           useVoiceTtsStore.getState().read();
+          return;
+        }
+
+        // Voice dictation (configurable shortcut; default Cmd+Shift+D).
+        const dictateShortcut = useSettingsStore.getState().settings["voice.shortcut.dictate"] as
+          | string
+          | undefined;
+        if (matchesShortcut(e, dictateShortcut)) {
+          e.preventDefault();
+          useVoiceSttStore.getState().start();
           return;
         }
       }

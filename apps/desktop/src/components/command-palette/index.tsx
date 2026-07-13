@@ -36,6 +36,7 @@ import { getFileName, getFileStem, getParentDir } from "@/lib/paths";
 import * as tauri from "@/lib/tauri";
 import type { RecentFile } from "@/lib/tauri";
 import { useVoiceTtsStore } from "@/lib/voice-tts";
+import { useVoiceSttStore } from "@/hooks/use-voice-stt";
 
 function toCreatePath(root: string, rawName: string) {
   const trimmed = rawName.trim();
@@ -78,6 +79,7 @@ export function CommandPalette() {
   const { toggleTheme } = useTheme();
   const openSettingsTab = useOpenSettingsTab();
   const isCompactFileMode = useIsCompactFileMode();
+  const isDictating = useVoiceSttStore((s) => s.isListening);
 
   const isCreateIntent = intent === "create-file";
   const trimmedSearch = search.trim();
@@ -212,6 +214,16 @@ export function CommandPalette() {
         description: "Read the current document with text-to-speech",
         run: () => {
           useVoiceTtsStore.getState().read();
+          close();
+        },
+      },
+    root &&
+      activeFilePath && {
+        id: "dictation",
+        label: isDictating ? "Stop Dictation" : "Start Dictation",
+        description: "Dictate into the document with offline speech-to-text",
+        run: () => {
+          useVoiceSttStore.getState().start();
           close();
         },
       },

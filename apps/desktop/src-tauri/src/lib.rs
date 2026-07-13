@@ -576,6 +576,12 @@ pub fn run() {
             commands::shell_install::install_cli,
             #[cfg(target_os = "macos")]
             commands::shell_install::uninstall_cli,
+            #[cfg(target_os = "macos")]
+            commands::voice::voice_stt_ensure_model,
+            #[cfg(target_os = "macos")]
+            commands::voice::voice_stt_start,
+            #[cfg(target_os = "macos")]
+            commands::voice::voice_stt_stop,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
