@@ -298,9 +298,9 @@
     {
       "key": "voice.tts.voice",
       "label": "Read-Aloud Voice",
-      "description": "macOS voice identifier for read-aloud (e.g. \"Samantha\", \"Daniel\"). Blank uses the system default voice.",
+      "description": "macOS system voice used for read-aloud. Blank uses the system default voice.",
       "category": "Voice",
-      "type": "string",
+      "type": "voice",
       "default": ""
     },
     {

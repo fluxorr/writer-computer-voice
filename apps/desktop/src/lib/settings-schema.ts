@@ -53,7 +53,16 @@ export interface SettingDef {
   label: string;
   description: string;
   category: string;
-  type: "string" | "number" | "boolean" | "enum" | "list" | "color" | "range" | "shortcut";
+  type:
+    | "string"
+    | "number"
+    | "boolean"
+    | "enum"
+    | "list"
+    | "color"
+    | "range"
+    | "shortcut"
+    | "voice";
   options?: string[];
   min?: number;
   max?: number;

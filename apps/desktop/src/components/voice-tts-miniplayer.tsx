@@ -1,5 +1,5 @@
 import { useVoiceTtsStore, type VoiceScope } from "@/lib/voice-tts";
-import { useSetting, useSetSetting } from "@/hooks/use-settings";
+import { useSetting } from "@/hooks/use-settings";
 
 const SCOPES: { value: VoiceScope; label: string }[] = [
   { value: "cursor", label: "Cursor" },
@@ -14,9 +14,9 @@ export function VoiceTtsMiniplayer() {
   const setScope = useVoiceTtsStore((s) => s.setScope);
   const toggle = useVoiceTtsStore((s) => s.toggle);
   const stop = useVoiceTtsStore((s) => s.stop);
+  const setRate = useVoiceTtsStore((s) => s.setRate);
 
   const rate = Number(useSetting("voice.tts.rate") ?? 1);
-  const setSetting = useSetSetting();
 
   if (!isPlaying && !isPaused) return null;
 
@@ -73,7 +73,8 @@ export function VoiceTtsMiniplayer() {
           max={2}
           step={0.1}
           value={rate}
-          onChange={(e) => setSetting("voice.tts.rate", Number(e.target.value))}
+          aria-label="Read-aloud speed"
+          onChange={(e) => setRate(Number(e.target.value))}
           className="w-20 accent-[var(--accent)]"
         />
         <span className="w-8 tabular-nums">{rate.toFixed(1)}x</span>

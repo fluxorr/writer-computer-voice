@@ -83,6 +83,20 @@ function EnumControl({
 
 const HEX_RE = /^#([0-9a-f]{6}|[0-9a-f]{3})$/i;
 
+/** Number of decimals implied by a range step (e.g. 0.1 → 1, 5 → 0). Keeps
+ *  fractional ranges like read-aloud rate/pitch from rounding to integers. */
+function stepDecimals(step: number): number {
+  if (!step || step >= 1) return 0;
+  const s = String(step);
+  const dot = s.indexOf(".");
+  return dot === -1 ? 0 : s.length - dot - 1;
+}
+
+function formatRangeValue(value: number, step: number): string {
+  const decimals = stepDecimals(step);
+  return Number(value).toFixed(decimals);
+}
+
 function ColorControl({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   // Local text state so the user can type intermediate invalid hex while editing.
   // Callers key this component on `value` so an external value change remounts it
@@ -156,8 +170,8 @@ function RangeControl({
         onChange={(e) => onChange(Number(e.target.value))}
         className="h-1 w-44 appearance-none rounded-full bg-[var(--surface-subtle)] accent-[var(--accent)] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow"
       />
-      <span className="w-8 shrink-0 text-right text-[13px] tabular-nums text-[var(--text-muted)]">
-        {Math.round(value)}
+      <span className="w-10 shrink-0 text-right text-[13px] tabular-nums text-[var(--text-muted)]">
+        {formatRangeValue(value, step)}
       </span>
     </div>
   );
@@ -266,6 +280,50 @@ function ShortcutControl({ value, onChange }: { value: string; onChange: (v: str
   );
 }
 
+function speechVoicesSupported(): boolean {
+  return typeof window !== "undefined" && "speechSynthesis" in window;
+}
+
+/** Read-aloud voice picker backed by the platform's SpeechSynthesis voices
+ *  (system offline macOS voices in the WebView). Stores the stable `voiceURI`;
+ *  an empty value means the system default voice. */
+function VoiceSelectControl({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  useEffect(() => {
+    if (!speechVoicesSupported()) return;
+    const synth = window.speechSynthesis;
+    const load = () => setVoices(synth.getVoices());
+    load();
+    // Voices often populate asynchronously after the first `getVoices()` call.
+    synth.onvoiceschanged = load;
+    return () => {
+      synth.onvoiceschanged = null;
+    };
+  }, []);
+
+  if (!speechVoicesSupported()) {
+    return <StringControl value={value} onChange={onChange} />;
+  }
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="Read-aloud voice"
+      className="min-w-[200px] h-9 appearance-none rounded-lg border border-transparent bg-[var(--surface-input)] bg-[length:12px_12px] bg-[position:right_10px_center] bg-no-repeat pl-3 pr-8 text-[13px] text-[var(--text-secondary)] font-[inherit] outline-none focus:border-[var(--focus-border)] focus-visible:outline-none bg-[image:var(--select-chevron)]"
+    >
+      <option value="">System Default</option>
+      {voices.map((v) => (
+        <option key={v.voiceURI} value={v.voiceURI}>
+          {v.name}
+          {v.lang ? ` · ${v.lang}` : ""}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 /** Dispatch a control widget for a SettingDef. The single switch keeps the
  *  schema → control mapping centralized; any view rendering settings should
  *  use this rather than re-implementing the type dispatch. */
@@ -285,6 +343,8 @@ function Control({
       return <NumberControl value={value as number} onChange={onChange} />;
     case "string":
       return <StringControl value={value as string} onChange={onChange} />;
+    case "voice":
+      return <VoiceSelectControl value={(value as string) ?? ""} onChange={onChange} />;
     case "enum":
       return (
         <EnumControl value={value as string} options={def.options ?? []} onChange={onChange} />

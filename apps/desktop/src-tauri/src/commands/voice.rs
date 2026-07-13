@@ -26,9 +26,13 @@ unsafe impl Sync for AudioStream {}
 const TARGET_SAMPLE_RATE: usize = 16_000;
 /// Whisper needs at least ~1s of audio before a transcription is meaningful.
 const MIN_TRANSCRIBE_SAMPLES: usize = TARGET_SAMPLE_RATE;
+/// Minimum *new* audio since the last emit before we transcribe again, so we
+/// don't re-run whisper on every tiny buffer.
+const MIN_NEW_SAMPLES: usize = 8_000;
 /// How often the worker loop wakes to transcribe buffered audio.
 const WORKER_INTERVAL: Duration = Duration::from_millis(2_500);
-/// Resampler input frame size (before conversion to 16kHz).
+/// Resampler nominal input frame size (before conversion to 16kHz). The real
+/// chunk size is whatever `resampler.input_frames_next()` asks for.
 const RESAMPLER_CHUNK: usize = 4_096;
 /// Emit download progress roughly every 256KB.
 const PROGRESS_STEP: u64 = 256 * 1_024;
@@ -36,8 +40,14 @@ const PROGRESS_STEP: u64 = 256 * 1_024;
 struct VoiceRuntime {
     running: bool,
     stream: Option<AudioStream>,
-    captured: Arc<std::sync::Mutex<Vec<f32>>>,
-    pending: Vec<f32>,
+    /// Raw mono f32 captured from the mic at the device sample rate.
+    raw: Arc<std::sync::Mutex<Vec<f32>>>,
+    /// Resampled 16kHz mono audio accumulated across the whole session.
+    resampled: Vec<f32>,
+    /// Tail of the last resample pass that didn't fill a full chunk yet.
+    resample_leftover: Vec<f32>,
+    /// How much of `resampled` we've already emitted as a partial.
+    emitted_len: usize,
     cancel: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
     context: Option<Arc<whisper_rs::WhisperContext>>,
@@ -58,8 +68,10 @@ impl VoiceRuntime {
         VoiceRuntime {
             running: false,
             stream: None,
-            captured: Arc::new(std::sync::Mutex::new(Vec::new())),
-            pending: Vec::new(),
+            raw: Arc::new(std::sync::Mutex::new(Vec::new())),
+            resampled: Vec::new(),
+            resample_leftover: Vec::new(),
+            emitted_len: 0,
             cancel: Arc::new(AtomicBool::new(false)),
             worker: None,
             context: None,
@@ -124,7 +136,7 @@ pub async fn voice_stt_ensure_model(
     model: String,
 ) -> Result<(), String> {
     let app = window.app_handle();
-    let path = model_path(&app, &model)?;
+    let path = model_path(app, &model)?;
 
     if path.exists() {
         let _ = window.emit("voice-stt-model", json!({ "status": "ready" }));
@@ -195,7 +207,7 @@ pub fn voice_stt_start(
     autopunctuate: bool,
 ) -> Result<(), String> {
     let app = window.app_handle();
-    let path = model_path(&app, &model)?;
+    let path = model_path(app, &model)?;
     if !path.exists() {
         return Err("model-not-ready".into());
     }
@@ -221,13 +233,14 @@ pub fn voice_stt_start(
         guard.model = model.clone();
     }
 
-    // Set up the audio device + stream config (f32 inferred from the callback).
+    // Set up the audio device + stream config. We explicitly require an f32
+    // stream: the data callback below is `&[f32]`, and cpal only honors the
+    // generic sample type when the chosen config supports it.
     let host = cpal::default_host();
     let device = host
         .default_input_device()
         .ok_or_else(|| "no input device".to_string())?;
-    let default_config = device.default_input_config().map_err(|e| e.to_string())?;
-    let stream_config: StreamConfig = default_config.into();
+    let stream_config = f32_input_config(&device)?;
     let device_sample_rate = stream_config.sample_rate.0 as usize;
     let channels = stream_config.channels as usize;
 
@@ -240,15 +253,17 @@ pub fn voice_stt_start(
         1,
     )
     .map_err(|e| e.to_string())?;
+
     guard.resampler = Some(resampler);
-    guard.pending.clear();
-    guard.captured = Arc::new(std::sync::Mutex::new(Vec::new()));
+    guard.raw = Arc::new(std::sync::Mutex::new(Vec::new()));
+    guard.resampled.clear();
+    guard.resample_leftover.clear();
+    guard.emitted_len = 0;
     guard.cancel.store(false, Ordering::SeqCst);
     guard.language = language.clone();
     guard.autopunctuate = autopunctuate;
 
-    let rt_for_stream = Arc::clone(&rt);
-    let captured = Arc::clone(&guard.captured);
+    let raw = Arc::clone(&guard.raw);
     let data_callback = move |data: &[f32], _info: &InputCallbackInfo| {
         let channels = channels.max(1);
         let frames = data.len() / channels;
@@ -261,38 +276,8 @@ pub fn voice_stt_start(
             mono.push(sum / channels as f32);
         }
 
-        // Move the captured mono samples into a local so we don't hold two
-        // mutable borrows of the runtime guard at once (pending + resampler).
-        let pending = {
-            let mut g = match rt_for_stream.lock() {
-                Ok(g) => g,
-                Err(_) => return,
-            };
-            g.pending.extend_from_slice(&mono);
-            std::mem::take(&mut g.pending)
-        };
-
-        // Resample the pending chunk(s) to 16kHz mono, then append to the
-        // shared capture buffer.
-        let mut collected: Vec<f32> = Vec::new();
-        {
-            let mut g = match rt_for_stream.lock() {
-                Ok(g) => g,
-                Err(_) => return,
-            };
-            if let Some(resampler) = g.resampler.as_mut() {
-                let need = resampler.input_frames_next();
-                let mut p = pending;
-                while p.len() >= need {
-                    let chunk: Vec<f32> = p.drain(..need).collect();
-                    if let Ok(out) = resampler.process(&[chunk], None) {
-                        collected.extend_from_slice(&out[0]);
-                    }
-                }
-            }
-        }
-        if let Ok(mut cap) = captured.lock() {
-            cap.extend_from_slice(&collected);
+        if let Ok(mut cap) = raw.lock() {
+            cap.extend_from_slice(&mono);
         }
     };
 
@@ -315,6 +300,7 @@ pub fn voice_stt_start(
         let rt = rt_for_worker;
         loop {
             thread::sleep(WORKER_INTERVAL);
+
             let (ctx, lang, autop) = {
                 let g = rt.lock().unwrap();
                 if g.cancel.load(Ordering::SeqCst) {
@@ -325,16 +311,50 @@ pub fn voice_stt_start(
                     None => break,
                 }
             };
-            let samples = {
-                let captured_arc = ctx_lock_captured(&rt);
-                let mut cap = captured_arc.lock().unwrap();
-                std::mem::take(&mut *cap)
+
+            // Pull raw audio, resample it into the persistent 16kHz buffer,
+            // and emit a cumulative partial whenever enough new audio arrived.
+            let new_len = {
+                let mut g = rt.lock().unwrap();
+                let raw = {
+                    let mut r = g.raw.lock().unwrap();
+                    std::mem::take(&mut *r)
+                };
+                if !raw.is_empty() {
+                    let mut p = std::mem::take(&mut g.resample_leftover);
+                    p.extend(raw);
+                    let mut out: Vec<f32> = Vec::new();
+                    // Feed the resampler exactly what it asks for each pass.
+                    // `input_frames_next()` can exceed RESAMPLER_CHUNK on the
+                    // first call, so re-query it every iteration and keep any
+                    // remainder for the next batch.
+                    loop {
+                        let need = g.resampler.as_ref().unwrap().input_frames_next();
+                        if p.len() < need {
+                            break;
+                        }
+                        let chunk: Vec<f32> = p.drain(..need).collect();
+                        if let Ok(o) = g.resampler.as_mut().unwrap().process(&[chunk], None) {
+                            out.extend_from_slice(&o[0]);
+                        }
+                    }
+                    g.resample_leftover = p;
+                    g.resampled.extend(out);
+                }
+                g.resampled.len()
             };
-            if samples.len() > MIN_TRANSCRIBE_SAMPLES {
+
+            if new_len >= MIN_TRANSCRIBE_SAMPLES && new_len - g_emitted_len(&rt) >= MIN_NEW_SAMPLES {
+                let samples = {
+                    let g = rt.lock().unwrap();
+                    g.resampled.clone()
+                };
                 match transcribe(&ctx, &samples, &lang, autop) {
                     Ok(text) => {
-                        let _ =
-                            worker_window.emit("voice-stt-partial", json!({ "text": text.trim() }));
+                        let _ = worker_window
+                            .emit("voice-stt-partial", json!({ "text": text.trim() }));
+                        let mut g = rt.lock().unwrap();
+                        g.emitted_len = new_len;
                     }
                     Err(e) => {
                         let _ = worker_window.emit(
@@ -351,16 +371,31 @@ pub fn voice_stt_start(
     Ok(())
 }
 
-fn ctx_lock_captured(rt: &Arc<std::sync::Mutex<VoiceRuntime>>) -> Arc<std::sync::Mutex<Vec<f32>>> {
-    let g = rt.lock().unwrap();
-    Arc::clone(&g.captured)
+/// Read the `emitted_len` field without borrowing `ctx`.
+fn g_emitted_len(rt: &Arc<std::sync::Mutex<VoiceRuntime>>) -> usize {
+    rt.lock().unwrap().emitted_len
+}
+
+/// Pick a stream config whose sample format is f32, preferring the most
+/// channels available. cpal infers the generic stream type from the data
+/// callback; an f32 callback requires an f32-capable config or `build_input_stream`
+/// fails.
+fn f32_input_config(device: &cpal::Device) -> Result<StreamConfig, String> {
+    let supported = device
+        .supported_input_configs()
+        .map_err(|e| e.to_string())?
+        .filter(|c| c.sample_format() == cpal::SampleFormat::F32)
+        .max_by(|a, b| a.channels().cmp(&b.channels()))
+        .map(|c| c.with_max_sample_rate())
+        .ok_or_else(|| "no f32-capable input config".to_string())?;
+    Ok(supported.into())
 }
 
 /// Stop capturing and emit the final transcript.
 #[tauri::command]
 pub fn voice_stt_stop(window: tauri::WebviewWindow) -> Result<(), String> {
     let rt = runtime();
-    let (captured, ctx, language, autopunctuate) = {
+    let (samples, ctx, language, autopunctuate) = {
         let mut g = rt.lock().unwrap();
         if !g.running {
             return Ok(());
@@ -372,22 +407,17 @@ pub fn voice_stt_stop(window: tauri::WebviewWindow) -> Result<(), String> {
             let _ = handle.join();
         }
 
-        let captured = Arc::clone(&g.captured);
+        let samples = std::mem::take(&mut g.resampled);
         let ctx = g.context.clone();
         let language = g.language.clone();
         let autopunctuate = g.autopunctuate;
 
         g.running = false;
-        (captured, ctx, language, autopunctuate)
-    };
-
-    let samples = {
-        let mut cap = captured.lock().unwrap();
-        std::mem::take(&mut *cap)
+        (samples, ctx, language, autopunctuate)
     };
 
     if let Some(ctx) = ctx.as_ref() {
-        if samples.len() > 0 {
+        if !samples.is_empty() {
             match transcribe(ctx, &samples, &language, autopunctuate) {
                 Ok(text) => {
                     let _ = window.emit("voice-stt-final", json!({ "text": text.trim() }));

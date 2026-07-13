@@ -23,11 +23,24 @@ interface VoiceTtsState {
   read: (scope?: VoiceScope) => void;
   toggle: () => void;
   stop: () => void;
+  /** Update speech rate live (restarts the current utterance at the current
+   *  word so the change is heard immediately). */
+  setRate: (rate: number) => void;
+  /** Update speech pitch live (same restart behavior as rate). */
+  setPitch: (pitch: number) => void;
 }
 
 // ----- module-level controller state (speech is a singleton) -----
 
 let activeView: EditorView | null = null;
+// Bounds of the active utterance and the last spoken char offset, so a live
+// rate/pitch change can restart speech from where the user is listening.
+let activeFrom = 0;
+let activeTo = 0;
+let lastBoundary = 0;
+// Bumped on every `speakRange` so a stale `onend`/`onerror` from a cancelled
+// utterance can't end the session that replaced it.
+let sessionGen = 0;
 
 function speechSupported() {
   return typeof window !== "undefined" && "speechSynthesis" in window;
@@ -82,19 +95,15 @@ function computeRange(scope: VoiceScope): { view: EditorView; from: number; to: 
   return { view, from, to };
 }
 
-function read(scopeFromCaller?: VoiceScope) {
-  if (!speechSupported()) {
-    console.warn("[voice] Web Speech API unavailable in this environment");
+/** Speak the slice `[from, to)` of `view`'s document. Cancels any in-flight
+ *  utterance first, so it doubles as a restart. Tracks the active bounds so a
+ *  live rate/pitch change can resume from the current word. */
+function speakRange(view: EditorView, from: number, to: number) {
+  const text = view.state.doc.sliceString(from, to);
+  if (!text.trim()) {
+    endSession();
     return;
   }
-
-  const scope = scopeFromCaller ?? useVoiceTtsStore.getState().scope;
-  const range = computeRange(scope);
-  if (!range) return;
-
-  const { view, from, to } = range;
-  const text = view.state.doc.sliceString(from, to);
-  if (!text.trim()) return;
 
   // Cancel anything currently queued/spoken before starting fresh.
   window.speechSynthesis.cancel();
@@ -109,10 +118,15 @@ function read(scopeFromCaller?: VoiceScope) {
   }
 
   activeView = view;
+  activeFrom = from;
+  activeTo = to;
+  lastBoundary = 0;
+  const gen = ++sessionGen;
 
   u.onboundary = (event: SpeechSynthesisEvent) => {
     if (!activeView) return;
     const ci = event.charIndex;
+    lastBoundary = ci;
     let len = event.charLength;
     if (!len || len <= 0) {
       const rest = text.slice(ci);
@@ -121,11 +135,37 @@ function read(scopeFromCaller?: VoiceScope) {
     }
     applyVoiceHighlight(activeView, from + ci, from + ci + len);
   };
-  u.onend = () => endSession();
-  u.onerror = () => endSession();
+  u.onend = () => {
+    if (gen === sessionGen) endSession();
+  };
+  u.onerror = () => {
+    if (gen === sessionGen) endSession();
+  };
 
   window.speechSynthesis.speak(u);
   useVoiceTtsStore.setState({ isPlaying: true, isPaused: false });
+}
+
+function read(scopeFromCaller?: VoiceScope) {
+  if (!speechSupported()) {
+    console.warn("[voice] Web Speech API unavailable in this environment");
+    return;
+  }
+
+  const scope = scopeFromCaller ?? useVoiceTtsStore.getState().scope;
+  const range = computeRange(scope);
+  if (!range) return;
+
+  speakRange(range.view, range.from, range.to);
+}
+
+/** Persist a rate/pitch change and, if currently speaking, restart the
+ *  utterance from the last spoken word so the new value takes effect at once. */
+function applyLiveParam() {
+  if (!speechSupported()) return;
+  const st = useVoiceTtsStore.getState();
+  if (!st.isPlaying || st.isPaused || !activeView) return;
+  speakRange(activeView, activeFrom + lastBoundary, activeTo);
 }
 
 function toggle() {
@@ -160,4 +200,12 @@ export const useVoiceTtsStore = create<VoiceTtsState>((set) => ({
   read: (scope) => read(scope),
   toggle: () => toggle(),
   stop: () => stop(),
+  setRate: (rate) => {
+    void useSettingsStore.getState().setSetting("voice.tts.rate", rate);
+    applyLiveParam();
+  },
+  setPitch: (pitch) => {
+    void useSettingsStore.getState().setSetting("voice.tts.pitch", pitch);
+    applyLiveParam();
+  },
 }));

@@ -55,7 +55,7 @@ export function VoiceSttIndicator() {
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
         <span className="relative inline-flex h-3 w-3 rounded-full bg-accent" />
       </span>
-      <span className="truncate text-sm text-text">
+      <span className="min-w-0 max-h-32 overflow-y-auto break-words text-sm text-text">
         {liveText || <span className="text-text-muted">Listening…</span>}
       </span>
       <button
