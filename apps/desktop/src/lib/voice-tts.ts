@@ -46,6 +46,45 @@ function speechSupported() {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
+// WebKit (the Tauri WebView on macOS) stops speaking after ~15 s unless it is
+// nudged, and it can get stuck in a global "paused" state after a pause() that
+// was never resumed — which makes every later speak() queue silently. A small
+// keepalive timer resumes the engine while we're actively playing.
+let keepAlive: ReturnType<typeof setInterval> | null = null;
+
+function startKeepAlive() {
+  if (keepAlive != null || !speechSupported()) return;
+  keepAlive = setInterval(() => {
+    const s = window.speechSynthesis;
+    if (s.speaking && !useVoiceTtsStore.getState().isPaused) {
+      // pause()+resume() resets WebKit's internal watchdog without an audible gap.
+      s.pause();
+      s.resume();
+    }
+  }, 8000);
+}
+
+function stopKeepAlive() {
+  if (keepAlive != null) {
+    clearInterval(keepAlive);
+    keepAlive = null;
+  }
+}
+
+// Preload voices (async in WebKit) and clear any stuck engine state left over
+// from a previous window/session so the first read-aloud always speaks.
+if (speechSupported()) {
+  try {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.getVoices();
+    };
+    window.speechSynthesis.cancel();
+  } catch {
+    // ignore — some environments expose a partial SpeechSynthesis shim
+  }
+}
+
 function getTtsConfig() {
   const s = useSettingsStore.getState().settings;
   return {
@@ -67,6 +106,7 @@ function clearHighlight() {
 
 function endSession() {
   activeView = null;
+  stopKeepAlive();
   useVoiceTtsStore.setState({ isPlaying: false, isPaused: false });
 }
 
@@ -105,16 +145,25 @@ function speakRange(view: EditorView, from: number, to: number) {
     return;
   }
 
-  // Cancel anything currently queued/spoken before starting fresh.
+  // Cancel anything currently queued/spoken before starting fresh, then make
+  // sure the engine isn't stuck paused (WebKit would otherwise queue the new
+  // utterance silently).
   window.speechSynthesis.cancel();
+  window.speechSynthesis.resume();
 
   const u = new SpeechSynthesisUtterance(text);
   const cfg = getTtsConfig();
   u.rate = cfg.rate;
   u.pitch = cfg.pitch;
+  const voices = window.speechSynthesis.getVoices();
   if (cfg.voice) {
-    const v = window.speechSynthesis.getVoices().find((voice) => voice.voiceURI === cfg.voice);
+    const v = voices.find((voice) => voice.voiceURI === cfg.voice);
     if (v) u.voice = v;
+  }
+  // WebKit can refuse to speak an utterance with no explicit voice; fall back to
+  // a sensible default so read-aloud is never silent.
+  if (!u.voice && voices.length > 0) {
+    u.voice = voices.find((v) => v.lang?.startsWith("en") && v.localService) ?? voices[0]!;
   }
 
   activeView = view;
@@ -138,11 +187,16 @@ function speakRange(view: EditorView, from: number, to: number) {
   u.onend = () => {
     if (gen === sessionGen) endSession();
   };
-  u.onerror = () => {
+  u.onerror = (event: SpeechSynthesisErrorEvent) => {
+    // "interrupted"/"canceled" are expected when we restart or stop.
+    if (event.error !== "interrupted" && event.error !== "canceled") {
+      console.warn("[voice] read-aloud error:", event.error);
+    }
     if (gen === sessionGen) endSession();
   };
 
   window.speechSynthesis.speak(u);
+  startKeepAlive();
   useVoiceTtsStore.setState({ isPlaying: true, isPaused: false });
 }
 
@@ -154,7 +208,10 @@ function read(scopeFromCaller?: VoiceScope) {
 
   const scope = scopeFromCaller ?? useVoiceTtsStore.getState().scope;
   const range = computeRange(scope);
-  if (!range) return;
+  if (!range) {
+    console.warn("[voice] read-aloud: no active editor to read from");
+    return;
+  }
 
   speakRange(range.view, range.from, range.to);
 }

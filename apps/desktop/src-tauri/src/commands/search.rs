@@ -599,7 +599,14 @@ mod tests {
         )
         .unwrap();
         let (index, _dirs) = index_workspace_test(dir.path());
-        let results = search_workspace_content_impl("quick brown", &index, &ContentSearchOptions { limit_per_file: None, limit_total: None });
+        let results = search_workspace_content_impl(
+            "quick brown",
+            &index,
+            &ContentSearchOptions {
+                limit_per_file: None,
+                limit_total: None,
+            },
+        );
         assert!(!results.is_empty());
         assert!(results[0].relative_path.contains("notes.md"));
         assert_eq!(results[0].line_number, 2);
@@ -615,7 +622,14 @@ mod tests {
         )
         .unwrap();
         let (index, _dirs) = index_workspace_test(dir.path());
-        let results = search_workspace_content_impl("/quick brown", &index, &ContentSearchOptions { limit_per_file: None, limit_total: None });
+        let results = search_workspace_content_impl(
+            "/quick brown",
+            &index,
+            &ContentSearchOptions {
+                limit_per_file: None,
+                limit_total: None,
+            },
+        );
         assert!(!results.is_empty());
         assert_eq!(results[0].line_number, 2);
         assert_eq!(results[0].match_ranges.len(), 1);
@@ -625,9 +639,25 @@ mod tests {
     fn test_content_search_empty_query() {
         let dir = setup_workspace();
         let (index, _dirs) = index_workspace_test(dir.path());
-        assert!(search_workspace_content_impl("", &index, &ContentSearchOptions { limit_per_file: None, limit_total: None }).is_empty());
+        assert!(search_workspace_content_impl(
+            "",
+            &index,
+            &ContentSearchOptions {
+                limit_per_file: None,
+                limit_total: None
+            }
+        )
+        .is_empty());
         // Bare "/" strips to empty after the grep prefix.
-        assert!(search_workspace_content_impl("/", &index, &ContentSearchOptions { limit_per_file: None, limit_total: None }).is_empty());
+        assert!(search_workspace_content_impl(
+            "/",
+            &index,
+            &ContentSearchOptions {
+                limit_per_file: None,
+                limit_total: None
+            }
+        )
+        .is_empty());
     }
 
     #[test]

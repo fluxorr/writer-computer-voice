@@ -270,12 +270,14 @@ export type VoiceSttModelStatus =
   | { status: "ready" }
   | { status: "error"; message: string };
 
-export interface VoiceSttPartial {
+export interface VoiceSttDelta {
+  /** Incremental, already-committed text to append at the cursor. */
   text: string;
 }
 
-export interface VoiceSttFinal {
-  text: string;
+export interface VoiceSttLevel {
+  /** Live microphone input amplitude (0..1) for the animated indicator. */
+  level: number;
 }
 
 export interface VoiceSttStatus {

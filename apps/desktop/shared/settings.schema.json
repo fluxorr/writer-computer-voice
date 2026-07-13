@@ -346,11 +346,21 @@
     {
       "key": "voice.stt.model",
       "label": "Dictation Model",
-      "description": "Whisper model size for dictation. Downloaded on first use and cached.",
+      "description": "Whisper model for dictation. Smaller = faster/lower latency; .en models are English-only and faster. Downloaded on first use and cached.",
       "category": "Voice",
       "type": "enum",
-      "options": ["tiny", "base", "small", "medium", "large"],
-      "default": "small"
+      "options": [
+        "base.en",
+        "small.en",
+        "small.en-q8_0",
+        "medium.en-q8_0",
+        "tiny.en",
+        "base",
+        "small",
+        "medium",
+        "large-v3-turbo-q8_0"
+      ],
+      "default": "base.en"
     },
     {
       "key": "voice.stt.autopunctuate",

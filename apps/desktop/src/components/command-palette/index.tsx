@@ -79,7 +79,7 @@ export function CommandPalette() {
   const { toggleTheme } = useTheme();
   const openSettingsTab = useOpenSettingsTab();
   const isCompactFileMode = useIsCompactFileMode();
-  const isDictating = useVoiceSttStore((s) => s.isListening);
+  const isDictating = useVoiceSttStore((s) => s.phase === "listening");
 
   const isCreateIntent = intent === "create-file";
   const trimmedSearch = search.trim();

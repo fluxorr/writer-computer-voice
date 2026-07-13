@@ -124,7 +124,7 @@ export function useKeyboardShortcuts() {
           | undefined;
         if (matchesShortcut(e, readShortcut)) {
           e.preventDefault();
-          useVoiceTtsStore.getState().read();
+          useVoiceTtsStore.getState().toggle();
           return;
         }
 
