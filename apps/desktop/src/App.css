@@ -459,3 +459,10 @@ body.tree-dragging [data-tree-path] {
   border-radius: 3px;
   padding: 0 1px;
 }
+
+/* Read-aloud (TTS) karaoke highlight — the word currently being spoken. */
+.cm-tts-highlight {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+}

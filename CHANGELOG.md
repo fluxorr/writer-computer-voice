@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-13
+
+- Voice read-aloud (TTS). A new Voice settings category controls the TTS voice, rate, pitch, and read scope (cursor / selection / document); the chosen scope is remembered between uses. Trigger read-aloud from the command palette ("Read Aloud") or the `Cmd+Shift+R` shortcut (remappable in settings). While speaking, a small mini-player offers play/pause, stop, a scope switch, and a speed slider, and the currently-spoken word is highlighted in the editor (karaoke) and scrolled into view. On macOS the WebView's Web Speech API uses the system's offline voices, so read-aloud stays local-first.
+
 ## 2026-07-12
 
 - Full-content search across the workspace. Press `Cmd+Shift+F` (or the search-in-files button in the sidebar) to open a palette that scans every gitignored-indexed markdown file and returns matching lines, grouped by file with the matched characters highlighted. Typing a query runs a fuzzy match (all space-separated tokens must appear in a line, ranked by heading, proximity, and filename); prefix the query with `/` for a literal, case-insensitive grep of every occurrence. Selecting a result opens the file and scrolls to the line with a brief highlight. Reuses the existing file index for a live scan (no new dependency); results are debounced and capped (10 per file, 500 total).

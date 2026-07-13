@@ -4,6 +4,29 @@ import { useEditorStore } from "@/stores/editor-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { toggleSidebar } from "@/hooks/use-sidebar";
 import { getWorkspaceChromeMode } from "@/lib/compact-mode";
+import { useVoiceTtsStore } from "@/lib/voice-tts";
+import { useSettingsStore } from "@/stores/settings-store";
+
+/** Match a stored shortcut string (e.g. "Cmd+Shift+R") against a key event. */
+function matchesShortcut(e: KeyboardEvent, def: string | undefined): boolean {
+  if (!def) return false;
+  const tokens = def.split("+").map((t) => t.trim());
+  const key = tokens[tokens.length - 1]!.toUpperCase();
+  const need = (t: string) => tokens.includes(t);
+
+  if (need("Cmd") && !e.metaKey) return false;
+  if (need("Ctrl") && !e.ctrlKey) return false;
+  if (need("Alt") && !e.altKey) return false;
+  if (need("Shift") && !e.shiftKey) return false;
+
+  // The modifier tokens must all be accounted for; a bare Cmd shortcut must
+  // not also fire when Shift is held unless "Shift" is in the def.
+  if (!need("Cmd") && e.metaKey) return false;
+  if (!need("Ctrl") && e.ctrlKey) return false;
+  if (!need("Alt") && e.altKey) return false;
+
+  return e.key.toUpperCase() === key;
+}
 
 function isEditableTargetFocused(): boolean {
   const active = document.activeElement;
@@ -89,6 +112,20 @@ export function useKeyboardShortcuts() {
         e.preventDefault();
         if (root) openContentSearch();
         return;
+      }
+
+      // Voice read-aloud (configurable shortcut; default Cmd+Shift+R).
+      // Workspace windows only — voice inserts text, so it must run against
+      // an open document.
+      if (root && !isCompactFileMode) {
+        const readShortcut = useSettingsStore.getState().settings["voice.shortcut.read"] as
+          | string
+          | undefined;
+        if (matchesShortcut(e, readShortcut)) {
+          e.preventDefault();
+          useVoiceTtsStore.getState().read();
+          return;
+        }
       }
 
       // Cmd+T — new tab

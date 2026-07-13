@@ -35,6 +35,7 @@ import { settingsKind } from "@/components/editor-area/page-kinds/settings";
 import { getFileName, getFileStem, getParentDir } from "@/lib/paths";
 import * as tauri from "@/lib/tauri";
 import type { RecentFile } from "@/lib/tauri";
+import { useVoiceTtsStore } from "@/lib/voice-tts";
 
 function toCreatePath(root: string, rawName: string) {
   const trimmed = rawName.trim();
@@ -204,6 +205,16 @@ export function CommandPalette() {
         close();
       },
     },
+    root &&
+      activeFilePath && {
+        id: "read-aloud",
+        label: "Read Aloud",
+        description: "Read the current document with text-to-speech",
+        run: () => {
+          useVoiceTtsStore.getState().read();
+          close();
+        },
+      },
   ].filter((c): c is Command => Boolean(c));
 
   const visibleFiles: SearchResult[] =
