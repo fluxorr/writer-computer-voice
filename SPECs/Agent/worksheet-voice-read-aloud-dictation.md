@@ -96,3 +96,21 @@ model/autopunctuate`, `voice.shortcut.read/dictate`.
   run; mic + Metal need signed/notarized entitlements (wire now).
 - TTS char-range → doc-position mapping for highlight (track spoken slice
   offset within the document).
+
+## Implementation notes (as built)
+
+- **TTS uses the WebView's Web Speech API, not a Rust `AVSpeechSynthesizer`
+  command.** On macOS the WebView's `SpeechSynthesis` drives the system's
+  offline voices and emits `boundary` events, which give us the per-word
+  highlight + auto-scroll with zero new Rust dependencies and no native
+  delegate boilerplate. Behavior is still fully local-first. The Rust-side
+  `voice_tts_*` commands from the original plan were not added. If a true
+  separate native process is later required, add `AVSpeechSynthesizer` behind
+  `#[cfg(target_os = "macos")]` and emit will-speak/done events.
+- **STT is exactly as planned**: `whisper-rs` (whisper.cpp, Metal) + `cpal`
+  mic + `rubato` resample to 16kHz mono, model auto-downloaded to app data on
+  first use. Commands: `voice_stt_ensure_model`, `voice_stt_start`,
+  `voice_stt_stop` (macOS-gated). Insertion streams at the cursor; the
+  transcript is read from settings (`voice.stt.model/language/autopunctuate`).
+- Shortcuts wired from settings (`voice.shortcut.read` = Cmd+Shift+R,
+  `voice.shortcut.dictate` = Cmd+Shift+D), plus command-palette entries.
