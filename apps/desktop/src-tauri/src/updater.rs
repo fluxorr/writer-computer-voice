@@ -180,11 +180,11 @@ pub fn start_check(app: AppHandle, manual: bool) {
                     with_parent(
                         app.dialog()
                             .message(format!(
-                                "You're up to date. Writer {} is the latest version.",
+                                "You're up to date. Speakdown {} is the latest version.",
                                 current
                             ))
                             .kind(MessageDialogKind::Info)
-                            .title("Writer"),
+                            .title("Speakdown"),
                         parent.as_ref(),
                     )
                     .show(|_| {});
@@ -201,7 +201,7 @@ pub fn start_check(app: AppHandle, manual: bool) {
                         app.dialog()
                             .message(format!("Could not check for updates.\n\n{}", message))
                             .kind(MessageDialogKind::Error)
-                            .title("Writer"),
+                            .title("Speakdown"),
                         parent.as_ref(),
                     )
                     .show(|_| {});
@@ -214,9 +214,9 @@ pub fn start_check(app: AppHandle, manual: bool) {
 fn prompt_install(app: AppHandle, version: String, notes: Option<String>) {
     let body = match notes.as_deref() {
         Some(notes) if !notes.trim().is_empty() => {
-            format!("Writer {} is available.\n\n{}", version, notes.trim())
+            format!("Speakdown {} is available.\n\n{}", version, notes.trim())
         }
-        _ => format!("Writer {} is available.", version),
+        _ => format!("Speakdown {} is available.", version),
     };
 
     let version_for_dismiss = version.clone();
@@ -280,7 +280,7 @@ pub fn start_install(app: AppHandle) {
                     app.dialog()
                         .message(format!("Update failed.\n\n{}", message))
                         .kind(MessageDialogKind::Error)
-                        .title("Writer"),
+                        .title("Speakdown"),
                     parent.as_ref(),
                 )
                 .show(|_| {});

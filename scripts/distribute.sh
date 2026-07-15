@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="$ROOT_DIR/.env"
-RELEASE_REPO="joelbqz/writer-computer"
+RELEASE_REPO="fluxorr/speakdown"
 
 NOTES_FILE=""
 while [ $# -gt 0 ]; do
@@ -39,13 +39,16 @@ fi
 if [ ! -f "$ENV_FILE" ]; then
   echo "Error: .env file not found at $ENV_FILE"
   echo ""
-  echo "Create it with:"
+  echo "Create it with (updater key is required; Apple credentials are OPTIONAL):"
+  echo "  TAURI_SIGNING_PRIVATE_KEY=\"/absolute/path/to/speakdown-updater-key\""
+  echo "  TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"\"  # empty if keypair has no password"
+  echo ""
+  echo "  # Optional — set all four to produce a signed + notarized build."
+  echo "  # Omit them to ship an UNSIGNED app (users bypass Gatekeeper on first launch)."
   echo "  APPLE_SIGNING_IDENTITY=\"Developer ID Application: Your Name (TEAMID)\""
   echo "  APPLE_ID=\"your@apple.id\""
   echo "  APPLE_PASSWORD=\"xxxx-xxxx-xxxx-xxxx\"  # app-specific password"
   echo "  APPLE_TEAM_ID=\"XXXXXXXXXX\""
-  echo "  TAURI_SIGNING_PRIVATE_KEY=\"/absolute/path/to/writer-updater-key\""
-  echo "  TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"\"  # empty if keypair has no password"
   exit 1
 fi
 
@@ -53,12 +56,37 @@ set -a
 source "$ENV_FILE"
 set +a
 
-for var in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID TAURI_SIGNING_PRIVATE_KEY; do
-  if [ -z "${!var:-}" ]; then
-    echo "Error: $var is not set in .env"
-    exit 1
-  fi
-done
+# Only the updater key is mandatory — it signs the auto-update manifest and is
+# independent of Apple.
+if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+  echo "Error: TAURI_SIGNING_PRIVATE_KEY is not set in .env"
+  exit 1
+fi
+
+# `TAURI_SIGNING_PRIVATE_KEY` must be the key *contents* (base64). If .env
+# holds a file *path* instead (recommended, so the secret isn't pasted into
+# the env file), forward it through `TAURI_SIGNING_PRIVATE_KEY_PATH`, which
+# `tauri build`/`tauri signer` read as a path.
+if [ -f "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+  export TAURI_SIGNING_PRIVATE_KEY_PATH="$TAURI_SIGNING_PRIVATE_KEY"
+elif [ ! -f "$HOME/${TAURI_SIGNING_PRIVATE_KEY#\~/}" ] && [ ! -f "/${TAURI_SIGNING_PRIVATE_KEY#/}" ]; then
+  # Treat the value as the key string itself; leave it in place.
+  :
+fi
+fi
+
+# Apple signing/notarization is OPTIONAL. With all four APPLE_* vars present the
+# build is signed + notarized (no Gatekeeper prompt). Without them the build is
+# UNSIGNED — users must bypass Gatekeeper on first launch (right-click → Open, or
+# `xattr -dr com.apple.quarantine <app>`).
+if [ -n "${APPLE_SIGNING_IDENTITY:-}" ] && [ -n "${APPLE_ID:-}" ] &&
+  [ -n "${APPLE_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+  echo "Apple credentials found — building a signed + notarized app."
+else
+  echo "WARNING: Apple credentials not set — building an UNSIGNED app."
+  echo "  Users will need to bypass Gatekeeper on first launch:"
+  echo "    right-click the app -> Open, or  xattr -dr com.apple.quarantine <app>"
+fi
 
 # `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` is optional but tauri-cli checks the env
 # var is present — export an empty default so the build doesn't fail on macOS.
@@ -112,7 +140,7 @@ fi
 echo "Pushing master to origin..."
 git -C "$ROOT_DIR" push origin master
 
-echo "Building Writer $TAG..."
+echo "Building Speakdown $TAG..."
 
 # Build signed and notarized DMG + updater artifacts (.app.tar.gz + .sig).
 cd "$ROOT_DIR/apps/desktop"
@@ -153,7 +181,7 @@ esac
 SIGNATURE=$(cat "$SIG_FILE")
 TAR_NAME=$(basename "$TAR_FILE")
 PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-NOTES="Writer $TAG"
+NOTES="Speakdown $TAG"
 DOWNLOAD_URL="https://github.com/$RELEASE_REPO/releases/download/$TAG/$TAR_NAME"
 
 LATEST_JSON="$BUNDLE_DIR/latest.json"
@@ -184,7 +212,7 @@ echo "Creating draft release $TAG on $RELEASE_REPO..."
 
 gh release create "$TAG" "$DMG_FILE" "$TAR_FILE" "$LATEST_JSON" \
   --repo "$RELEASE_REPO" \
-  --title "Writer $TAG" \
+  --title "Speakdown $TAG" \
   --notes-file "$NOTES_FILE" \
   --draft
 

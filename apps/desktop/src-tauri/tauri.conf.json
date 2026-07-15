@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Writer",
+  "productName": "Speakdown",
   "version": "0.3.1",
-  "identifier": "com.writer-computer",
+  "identifier": "dev.fluxorr.speakdown",
   "build": {
     "beforeDevCommand": "vp dev",
     "devUrl": "http://localhost:1420",
@@ -65,10 +65,8 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENENEUyMDZFQjU0REVERTIKUldUaTdVMjFiaUJPelgxa29VQmgvbGN5TXFjQU5DTFFxQXR5S0hCYVJzY2hvRHJraFh2cXh2bFcK",
-      "endpoints": [
-        "https://github.com/joelbqz/writer-computer/releases/latest/download/latest.json"
-      ]
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVERjcxNzg5QjQzODNDQzYKUldUR1BEaTBpUmYzN1hwaUlqYm5ORVU5eXhYeEpOY3hUNEpQdEtIVzU5KzB0V2JpeDNoT0w5SnAK",
+      "endpoints": ["https://github.com/fluxorr/speakdown/releases/latest/download/latest.json"]
     }
   }
 }

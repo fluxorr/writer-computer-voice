@@ -9,14 +9,14 @@ export function WindowTitle() {
   const openFiles = useOpenFiles();
 
   const title = (() => {
-    if (!activeTab) return "Writer";
+    if (!activeTab) return "Speakdown";
     if (!activeFilePath) {
       const label = pageKind(activeTab.location).title(activeTab.location);
-      return `${label} - Writer`;
+      return `${label} - Speakdown`;
     }
     const file = openFiles.get(activeFilePath);
     const name = getFileName(activeFilePath);
-    return file?.isDirty ? `${name} (unsaved) - Writer` : `${name} - Writer`;
+    return file?.isDirty ? `${name} (unsaved) - Speakdown` : `${name} - Speakdown`;
   })();
 
   useWindowTitle(title);

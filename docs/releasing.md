@@ -51,12 +51,12 @@ The script will, in order:
 2. Run pre-flight git checks (on master, clean tree, fast-forward of origin, tag doesn't already exist).
 3. Push `master` to origin so the commit the release will point at is published before the build starts.
 4. Build the desktop crate in release mode (`vp exec tauri build --bundles app,dmg`).
-5. Sign `Writer.app` and the DMG with the Developer ID identity from `.env`.
+5. Sign `Speakdown.app` and the DMG with the Developer ID identity from `.env`.
 6. Submit the app to Apple notarization and wait for the result. This is the slowest step and the most likely to fail — if Apple returns anything other than `Accepted`, stop and report the notarization log to the user.
 7. Staple the notarization ticket to the app.
-8. Bundle `Writer.app.tar.gz` and produce `Writer.app.tar.gz.sig` using the Tauri updater key.
-9. Write `latest.json` with the new version, signature, and download URL pointing at `joelbqz/writer-computer`.
-10. Create a **draft** release on `joelbqz/writer-computer` via `gh release create --draft`, uploading the DMG, the updater tarball, and `latest.json`, with the drafted notes attached.
+8. Bundle `Speakdown.app.tar.gz` and produce `Speakdown.app.tar.gz.sig` using the Tauri updater key.
+9. Write `latest.json` with the new version, signature, and download URL pointing at `fluxorr/speakdown`.
+10. Create a **draft** release on `fluxorr/speakdown` via `gh release create --draft`, uploading the DMG, the updater tarball, and `latest.json`, with the drafted notes attached.
 11. Tag this repo with `v<version>` and push the tag to origin.
 12. Print the draft URL.
 
@@ -66,14 +66,14 @@ Expect the whole script to take several minutes — most of it is the cargo rele
 
 Open the draft URL printed by `distribute.sh`. Confirm:
 
-- Three assets are attached: `Writer_<version>_aarch64.dmg`, `Writer.app.tar.gz`, `latest.json`.
+- Three assets are attached: `Speakdown_<version>_aarch64.dmg`, `Speakdown.app.tar.gz`, `latest.json`.
 - The notes read well; edit them inline if needed.
 
 Click **Publish release**. Until you do, the in-app updater won't see the new version (the `latest` endpoint skips drafts). If you abandon the draft instead, delete the local and remote tag manually (`git tag -d v<version> && git push origin :refs/tags/v<version>`).
 
 ## Step 5 — Verify
 
-- Confirm `https://github.com/joelbqz/writer-computer/releases/latest/download/latest.json` resolves to the new version. The in-app updater hits this URL on launch (see `apps/desktop/src-tauri/tauri.conf.json`).
+- Confirm `https://github.com/fluxorr/speakdown/releases/latest/download/latest.json` resolves to the new version. The in-app updater hits this URL on launch (see `apps/desktop/src-tauri/tauri.conf.json`).
 - Existing installs will pick up the update on next launch.
 
 ## When things go wrong

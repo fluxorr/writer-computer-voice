@@ -6,12 +6,12 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Built by `pnpm run build:app` (cargo tauri build --features e2e).
-// `productName` in tauri.conf.json names the .app bundle ("Writer.app") but
+// `productName` in tauri.conf.json names the .app bundle ("Speakdown.app") but
 // the binary inside MacOS/ keeps the Cargo crate name ("desktop") — Tauri
 // does not rename it.
 const APP_BINARY = resolve(
   __dirname,
-  "../src-tauri/target/release/bundle/macos/Writer.app/Contents/MacOS/desktop",
+  "../src-tauri/target/release/bundle/macos/Speakdown.app/Contents/MacOS/desktop",
 );
 
 /** @type {import('node:child_process').ChildProcess | undefined} */

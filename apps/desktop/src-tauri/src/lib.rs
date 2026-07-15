@@ -268,8 +268,12 @@ fn install_app_menu(
     let cli_item = MenuItemBuilder::with_id("cli.toggle", CLI_MENU_INSTALL_LABEL).build(app)?;
 
     let app_submenu = {
-        let b = SubmenuBuilder::new(app, "Writer")
-            .item(&PredefinedMenuItem::about(app, Some("About Writer"), None)?)
+        let b = SubmenuBuilder::new(app, "Speakdown")
+            .item(&PredefinedMenuItem::about(
+                app,
+                Some("About Speakdown"),
+                None,
+            )?)
             .separator()
             .item(&check_item)
             .separator()
@@ -493,7 +497,7 @@ pub fn run() {
             let main_state = app.state::<AppState>().get_or_create(MAIN_WINDOW_LABEL);
             init_window_settings(app.handle(), &main_state);
 
-            // On macOS, `open -a Writer /path` delivers the path via
+            // On macOS, `open -a Speakdown /path` delivers the path via
             // RunEvent::Opened, not argv. On Linux/Windows the path
             // arrives through argv (or the single-instance plugin).
             #[cfg(not(target_os = "macos"))]
