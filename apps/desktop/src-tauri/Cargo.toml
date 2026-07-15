@@ -16,6 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+cc = "1"
 
 [dependencies]
 tauri = { version = "2", features = ["protocol-asset", "macos-private-api"] }
@@ -40,7 +41,12 @@ tauri-plugin-webdriver = { version = "0.2", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.4"
-whisper-rs = { version = "0.12", features = ["metal"] }
+# On-device streaming speech recognition (NeMo Transducer: Nemotron / Parakeet).
+# Prebuilt static libs auto-download for the host arch — no C++ toolchain needed.
+sherpa-onnx = "1"
+# Streaming dictation download + extraction of the model .tar.bz2 archives.
+tar = "0.4"
+bzip2 = "0.4"
 cpal = "0.15"
 rubato = "0.14"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }

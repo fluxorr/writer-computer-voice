@@ -74,6 +74,7 @@ import { consumePendingAnchor, setPendingAnchor } from "@/lib/pending-anchor";
 import { consumePendingLineJump } from "@/lib/pending-line-jump";
 import { applyLineJump, lineJumpExtension } from "./editor-line-jump";
 import { voiceHighlightExtension } from "./voice-highlight";
+import { dictationOverlayExtension } from "./dictation-overlay";
 import { logTimeline, mark } from "@/lib/startup-metrics";
 import * as tauri from "@/lib/tauri";
 import { showAnchorWarning } from "./anchor-warning-store";
@@ -609,6 +610,7 @@ function createEditorExtensions(
     headingDecorations,
     lineJumpExtension,
     voiceHighlightExtension,
+    dictationOverlayExtension,
     imageSrcResolver(getFilePath),
     wikiLinkExtension(getFilePath, isDisposed),
     markdownFormatting,

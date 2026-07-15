@@ -466,3 +466,29 @@ body.tree-dragging [data-tree-path] {
   border-radius: 3px;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
 }
+
+/* Live dictation overlay — the partial hypothesis rendered at the cursor
+   while the user is still speaking. Greyed and slightly glowing so it reads
+   as "not yet committed" next to the solid document text. */
+.cm-dictation-overlay {
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+  font-style: italic;
+  border-right: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  margin-right: 1px;
+  animation: dictation-caret 1s steps(2, jump-none) infinite;
+}
+
+@keyframes dictation-caret {
+  0% {
+    border-color: color-mix(in srgb, var(--accent) 75%, transparent);
+  }
+  100% {
+    border-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-dictation-overlay {
+    animation: none;
+  }
+}

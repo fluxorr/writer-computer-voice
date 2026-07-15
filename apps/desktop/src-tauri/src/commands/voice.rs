@@ -1,60 +1,107 @@
-// Voice dictation (STT) via whisper.cpp, driven locally on-device.
+// Voice dictation (STT), running locally and offline on-device. Two engines:
 //
-// Capture uses cpal (macOS only); audio is resampled to 16 kHz mono with rubato
-// and fed to whisper-rs. For a smooth, real-time feel we do NOT re-transcribe
-// overlapping sliding windows (that is slow and produces jittery half-words).
-// Instead a lightweight energy-based voice-activity detector (VAD) segments the
-// microphone stream into utterances: it waits for the speaker to pause, then
-// transcribes that one complete utterance once and streams it to the document.
-// This is both faster (each second of audio is decoded at most once) and far
-// smoother (text lands in natural, whole phrases at pauses).
+//   - `sherpa` (default): sherpa-onnx, a C++ speech toolkit with safe Rust
+//     bindings, driving NeMo Transducer models (Nemotron / Parakeet) two ways:
+//       * true streaming models (Nemotron) go through the `OnlineRecognizer`,
+//         which decodes one token per audio frame, so we get partial hypotheses
+//         *while the user is still speaking* and only commit final text when the
+//         utterance ends — the "Fluid" instantaneous feel;
+//       * non-streaming Transducers (Parakeet TDT) lack the streaming metadata
+//         the `OnlineRecognizer` needs, so they run through the
+//         `OfflineRecognizer`: we buffer the utterance and decode it once speech
+//         pauses. No live partials, but the same per-utterance commit UX.
+//     Capture uses cpal; audio is resampled to 16 kHz mono with rubato and fed
+//     to the model frame-by-frame on a worker thread.
 //
-// A `voice-stt-level` event carries the live input amplitude so the UI can show
-// an animated, voice-reactive indicator instead of a jittery text preview.
+//   - `apple-native`: Apple's on-device `SFSpeechRecognizer` fed by an
+//     `AVAudioEngine` tap, via a small Objective-C bridge (`apple_speech.m`).
+//     No model download; the OS ships the recognizer. The bridge streams the
+//     full running transcript as partials and commits it once on stop.
+//
+// Both engines stream the same events:
+//   - `voice-stt-partial` — the live, replaceable hypothesis (rendered as a
+//     greyed overlay at the cursor in the editor).
+//   - `voice-stt-final`  — the committed utterance (inserted into the doc on an
+//     endpoint / when dictation stops).
+//   - `voice-stt-level`  — the live input amplitude for the waveform indicator.
 
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+#[cfg(target_os = "macos")]
+use std::ffi::CStr;
+#[cfg(target_os = "macos")]
+use std::os::raw::{c_char, c_float, c_int, c_void};
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, InputCallbackInfo, SampleFormat, StreamConfig};
 use rubato::{FftFixedIn, Resampler};
 use serde_json::json;
+use sherpa_onnx::{OfflineRecognizer, OnlineRecognizer};
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+
+/// Engine id for Apple's native on-device `SFSpeechRecognizer`. Any other value
+/// (default) selects the sherpa-onnx engine.
+const ENGINE_APPLE: &str = "apple-native";
 
 const TARGET_SAMPLE_RATE: usize = 16_000;
 const RESAMPLER_CHUNK: usize = 8_192;
+/// How often the worker drains audio + decodes. Short so partial text feels
+/// live; decode is cheap so this stays smooth.
+const WORKER_TICK: Duration = Duration::from_millis(60);
 const PROGRESS_STEP: u64 = 256 * 1024;
 
-/// How often the worker drains audio, runs the VAD, and emits a level. Short so
-/// the animated indicator feels live and endpoints are detected promptly.
-const WORKER_TICK: Duration = Duration::from_millis(80);
-/// VAD analysis frame (30 ms @ 16 kHz).
-const FRAME: usize = 480;
-/// Trailing silence after speech that ends an utterance (~0.6 s pause).
-const ENDPOINT_SILENCE_SAMPLES: usize = 9_600;
-/// Minimum voiced audio for a segment to count as a real utterance (~0.2 s),
-/// so coughs/clicks don't trigger a transcription.
-const MIN_SPEECH_SAMPLES: usize = 3_200;
-/// Force-flush a monologue this long even without a pause (~14 s).
-const MAX_UTTERANCE_SAMPLES: usize = 14 * TARGET_SAMPLE_RATE;
-/// Audio kept before the first voiced frame, so whisper has a little lead-in.
-const PRE_PAD_SAMPLES: usize = 3_200; // 0.2 s
-/// Whisper wants at least ~1 s of audio; shorter buffers are zero-padded.
-const MIN_TRANSCRIBE_SAMPLES: usize = TARGET_SAMPLE_RATE;
-/// Absolute floor for treating a frame as speech (guards near-silent rooms).
-const MIN_VOICE_RMS: f32 = 0.012;
-/// A frame is voiced when its RMS exceeds this multiple of the noise floor.
-const VOICE_MULT: f32 = 2.2;
+/// Model registry: the Settings `voice.stt.model` id maps to a GitHub release
+/// asset (from `k2-fsa/sherpa-onnx` `asr-models`). Both are NeMo Transducers
+/// (encoder/decoder/joiner + tokens), discovered by globbing after extraction.
+///
+/// `streaming` distinguishes how the model is run:
+/// - `true`  → true streaming NeMo Transducer (Nemotron). Driven by the
+///   `OnlineRecognizer`; yields live partial hypotheses every frame.
+/// - `false` → a Token-and-Duration Transducer (Parakeet TDT). These export
+///   *without* the streaming `window_size`/`chunk_shift` metadata the
+///   `OnlineRecognizer` requires, so they run through the `OfflineRecognizer`:
+///   we buffer the utterance and decode it once when speech pauses. No live
+///   partials, but the same per-utterance commit UX.
+struct ModelDef {
+    archive: &'static str,
+    url: &'static str,
+    streaming: bool,
+}
+
+const MODELS: &[(&str, ModelDef)] = &[
+    (
+        "nemotron-streaming",
+        ModelDef {
+            archive: "sherpa-onnx-nemotron-speech-streaming-en-0.6b-int8-2026-01-14.tar.bz2",
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-speech-streaming-en-0.6b-int8-2026-01-14.tar.bz2",
+            streaming: true,
+        },
+    ),
+    (
+        "parakeet-tdt-v3",
+        ModelDef {
+            archive: "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
+            url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
+            streaming: false,
+        },
+    ),
+];
+
+fn model_def(id: &str) -> Option<&'static ModelDef> {
+    MODELS.iter().find(|(k, _)| *k == id).map(|(_, d)| d)
+}
 
 /// `cpal::Stream` is `!Send`/`!Sync` on macOS (it wraps a CoreAudio object),
 /// but it is safe to keep alive in a global as long as access is serialized.
-/// We only touch it from the command thread while holding the runtime mutex.
-/// The inner stream is never read directly — keeping the value alive is what
-/// sustains the audio capture.
+/// We only touch it from the command thread while holding the runtime mutex;
+/// the inner stream is never read directly — keeping the value alive sustains
+/// capture.
+#[allow(dead_code)]
 struct AudioStream(cpal::Stream);
 unsafe impl Send for AudioStream {}
 unsafe impl Sync for AudioStream {}
@@ -69,8 +116,12 @@ struct VoiceRuntime {
     epoch: u64,
     cancel: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
-    context: Option<Arc<WhisperContext>>,
     model: String,
+    /// Present only while the Apple native engine is running. Holds the bridge
+    /// handle and our leaked callback context, so `stop` can tear it down and
+    /// reclaim the box.
+    #[cfg(target_os = "macos")]
+    apple: Option<AppleSession>,
 }
 
 impl VoiceRuntime {
@@ -82,8 +133,9 @@ impl VoiceRuntime {
             epoch: 0,
             cancel: Arc::new(AtomicBool::new(false)),
             worker: None,
-            context: None,
             model: String::new(),
+            #[cfg(target_os = "macos")]
+            apple: None,
         }
     }
 }
@@ -94,28 +146,305 @@ fn runtime() -> Arc<Mutex<VoiceRuntime>> {
     Arc::clone(RUNTIME.get_or_init(|| Arc::new(Mutex::new(VoiceRuntime::new()))))
 }
 
+// ---------- Apple native engine (SFSpeechRecognizer via ObjC bridge) ----------
+
+#[cfg(target_os = "macos")]
+mod apple_ffi {
+    use std::os::raw::{c_char, c_float, c_int, c_void};
+    extern "C" {
+        pub fn apple_speech_request_authorization(
+            ctx: *mut c_void,
+            cb: extern "C" fn(*mut c_void, c_int, *const c_char),
+        );
+        pub fn apple_speech_start(
+            ctx: *mut c_void,
+            on_partial: extern "C" fn(*mut c_void, *const c_char),
+            on_final: extern "C" fn(*mut c_void, *const c_char),
+            on_error: extern "C" fn(*mut c_void, *const c_char),
+            on_level: extern "C" fn(*mut c_void, c_float),
+        ) -> *mut c_void;
+        pub fn apple_speech_stop(handle: *mut c_void);
+        pub fn apple_speech_abort();
+    }
+}
+
+/// The context handed to the ObjC bridge as an opaque pointer. Bridge callbacks
+/// borrow it (never take ownership) to emit events on the owning window; the
+/// `epoch` lets a callback from a stale session be dropped.
+#[cfg(target_os = "macos")]
+struct AppleCtx {
+    window: WebviewWindow,
+    rt: Arc<Mutex<VoiceRuntime>>,
+    epoch: u64,
+}
+
+/// A live Apple dictation session: `handle` is the bridge's opaque handle,
+/// `ctx` is our leaked `AppleCtx` box (freed on normal stop). Raw pointers, so
+/// we assert `Send` — access is serialized behind the runtime mutex.
+#[cfg(target_os = "macos")]
+struct AppleSession {
+    handle: *mut c_void,
+    ctx: *mut AppleCtx,
+}
+#[cfg(target_os = "macos")]
+unsafe impl Send for AppleSession {}
+
+#[cfg(target_os = "macos")]
+unsafe fn apple_cstr(p: *const c_char) -> String {
+    if p.is_null() {
+        return String::new();
+    }
+    CStr::from_ptr(p).to_string_lossy().into_owned()
+}
+
+/// Borrow the `AppleCtx` from an opaque pointer, but only if it still owns the
+/// current session (epoch match). Returns `None` for stale/invalid callbacks.
+#[cfg(target_os = "macos")]
+fn apple_ctx_if_current<'a>(ctx: *mut c_void) -> Option<&'a AppleCtx> {
+    if ctx.is_null() {
+        return None;
+    }
+    let c: &AppleCtx = unsafe { &*(ctx as *const AppleCtx) };
+    let current = c.rt.lock().map(|g| g.epoch == c.epoch).unwrap_or(false);
+    if current {
+        Some(c)
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn apple_on_partial(ctx: *mut c_void, text: *const c_char) {
+    if let Some(c) = apple_ctx_if_current(ctx) {
+        let t = unsafe { apple_cstr(text) };
+        let _ = c.window.emit("voice-stt-partial", json!({ "text": t }));
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn apple_on_final(ctx: *mut c_void, text: *const c_char) {
+    // Not gated on `running` (fires during stop, once running is already false),
+    // only on epoch, so the final always commits for the current session.
+    if let Some(c) = apple_ctx_if_current(ctx) {
+        let t = unsafe { apple_cstr(text) };
+        if !t.trim().is_empty() {
+            let _ = c.window.emit("voice-stt-final", json!({ "text": t }));
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn apple_on_error(ctx: *mut c_void, text: *const c_char) {
+    if let Some(c) = apple_ctx_if_current(ctx) {
+        let msg = unsafe { apple_cstr(text) };
+        // Stop the mic immediately (safe from inside the result handler) and
+        // reset the runtime so a later start works. We deliberately leak this
+        // (tiny) `AppleCtx` box rather than free it while still borrowing it.
+        unsafe { apple_ffi::apple_speech_abort() };
+        if let Ok(mut g) = c.rt.lock() {
+            g.running = false;
+            let _ = g.apple.take();
+        }
+        let _ = c.window.emit(
+            "voice-stt-status",
+            json!({ "status": "error", "message": msg }),
+        );
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn apple_on_level(ctx: *mut c_void, level: c_float) {
+    if let Some(c) = apple_ctx_if_current(ctx) {
+        let l = (level * 2.6).clamp(0.0, 1.0);
+        let _ = c.window.emit("voice-stt-level", json!({ "level": l }));
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn apple_auth_cb(ctx: *mut c_void, granted: c_int, err: *const c_char) {
+    if ctx.is_null() {
+        return;
+    }
+    // Reclaim the one-shot window box leaked in `apple_ensure`.
+    let window = unsafe { Box::from_raw(ctx as *mut WebviewWindow) };
+    if granted == 1 {
+        let _ = window.emit("voice-stt-model", json!({ "status": "ready" }));
+    } else {
+        let msg = unsafe { apple_cstr(err) };
+        let message = if msg.is_empty() {
+            "speech recognition not authorized".to_string()
+        } else {
+            msg
+        };
+        let _ = window.emit(
+            "voice-stt-model",
+            json!({ "status": "error", "message": message }),
+        );
+    }
+}
+
+/// Request speech-recognition authorization, then emit `voice-stt-model`
+/// ready/error. Mirrors the sherpa `ensure_model` flow (which downloads then
+/// emits ready) so the frontend's start-after-ready path is engine-agnostic.
+#[cfg(target_os = "macos")]
+fn apple_ensure(window: WebviewWindow) {
+    let ctx = Box::into_raw(Box::new(window)) as *mut c_void;
+    unsafe { apple_ffi::apple_speech_request_authorization(ctx, apple_auth_cb) };
+}
+
+#[cfg(target_os = "macos")]
+fn start_apple(window: WebviewWindow, model: String) -> Result<(), String> {
+    let rt = runtime();
+    let epoch = {
+        let mut g = rt.lock().unwrap();
+        if g.running {
+            return Ok(());
+        }
+        g.running = true;
+        g.model = model;
+        g.epoch = g.epoch.wrapping_add(1);
+        g.epoch
+    };
+
+    let ctx = Box::into_raw(Box::new(AppleCtx {
+        window: window.clone(),
+        rt: Arc::clone(&rt),
+        epoch,
+    }));
+
+    // On failure the bridge invokes `on_error` synchronously (already emitted a
+    // status), then returns null. The runtime lock is released above, so that
+    // callback's epoch check won't deadlock.
+    let handle = unsafe {
+        apple_ffi::apple_speech_start(
+            ctx as *mut c_void,
+            apple_on_partial,
+            apple_on_final,
+            apple_on_error,
+            apple_on_level,
+        )
+    };
+
+    if handle.is_null() {
+        unsafe { drop(Box::from_raw(ctx)) };
+        if let Ok(mut g) = rt.lock() {
+            g.running = false;
+        }
+        return Err("failed to start native dictation".into());
+    }
+
+    {
+        let mut g = rt.lock().unwrap();
+        g.apple = Some(AppleSession { handle, ctx });
+    }
+    let _ = window.emit("voice-stt-status", json!({ "status": "listening" }));
+    Ok(())
+}
+
+/// Stop the Apple session: the bridge emits the final transcript synchronously,
+/// then we free the callback context and emit `idle`. The runtime lock is held
+/// only to take the session, never across the FFI call, so the `on_final`
+/// callback's epoch check can't deadlock.
+#[cfg(target_os = "macos")]
+fn stop_apple(window: &WebviewWindow) {
+    let rt = runtime();
+    let session = {
+        let mut g = rt.lock().unwrap();
+        if !g.running {
+            return;
+        }
+        g.running = false;
+        g.apple.take()
+    };
+    if let Some(session) = session {
+        unsafe {
+            apple_ffi::apple_speech_stop(session.handle);
+            drop(Box::from_raw(session.ctx));
+        }
+    }
+    let _ = window.emit("voice-stt-status", json!({ "status": "idle" }));
+}
+
+fn model_dir(app: &AppHandle, model: &str) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("voice")
+        .join("models")
+        .join(model);
+    Ok(dir)
+}
+
+/// Recursively locate the model's four artifacts inside an extracted dir,
+/// tolerant of the archive's internal folder layout / filename casing.
+fn discover_model_files(dir: &std::path::Path) -> Option<(PathBuf, PathBuf, PathBuf, PathBuf)> {
+    let mut enc = None;
+    let mut dec = None;
+    let mut join = None;
+    let mut tok = None;
+    fn walk(
+        d: &std::path::Path,
+        enc: &mut Option<PathBuf>,
+        dec: &mut Option<PathBuf>,
+        join: &mut Option<PathBuf>,
+        tok: &mut Option<PathBuf>,
+    ) {
+        let Ok(entries) = std::fs::read_dir(d) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                walk(&p, enc, dec, join, tok);
+            } else if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+                let lower = name.to_ascii_lowercase();
+                if lower == "tokens.txt" {
+                    *tok = Some(p.clone());
+                } else if lower.contains("encoder") && lower.ends_with(".onnx") {
+                    *enc = Some(p.clone());
+                } else if lower.contains("decoder") && lower.ends_with(".onnx") {
+                    *dec = Some(p.clone());
+                } else if lower.contains("joiner") && lower.ends_with(".onnx") {
+                    *join = Some(p.clone());
+                }
+            }
+        }
+    }
+    walk(dir, &mut enc, &mut dec, &mut join, &mut tok);
+    Some((enc?, dec?, join?, tok?))
+}
+
 #[cfg(target_os = "macos")]
 #[tauri::command]
 pub fn voice_stt_ensure_model(
     app: AppHandle,
     window: WebviewWindow,
+    engine: String,
     model: String,
 ) -> Result<(), String> {
-    let path = model_path(&app, &model)?;
+    // The Apple native engine ships with the OS — no model to fetch. Requesting
+    // authorization emits `voice-stt-model` ready/error, matching the sherpa
+    // download flow so the frontend's start-after-ready path is shared.
+    if engine == ENGINE_APPLE {
+        apple_ensure(window);
+        return Ok(());
+    }
 
-    if path.exists() {
+    let def = model_def(&model).ok_or_else(|| format!("unknown dictation model: {model}"))?;
+    let dir = model_dir(&app, &model)?;
+
+    if discover_model_files(&dir).is_some() {
         let _ = window.emit("voice-stt-model", json!({ "status": "ready" }));
         return Ok(());
     }
 
-    std::fs::create_dir_all(path.parent().ok_or("invalid model path")?)
-        .map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
-    let url = format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{model}.bin");
     let win = window.clone();
-    let dl_path = path.clone();
+    let dl_dir = dir.clone();
     tauri::async_runtime::spawn(async move {
-        if let Err(err) = download_model(&win, &url, &dl_path).await {
+        if let Err(err) = download_and_extract(&win, def, &dl_dir).await {
             let _ = win.emit(
                 "voice-stt-model",
                 json!({ "status": "error", "message": err }),
@@ -131,38 +460,37 @@ pub fn voice_stt_ensure_model(
 pub fn voice_stt_ensure_model(
     _app: AppHandle,
     _window: WebviewWindow,
+    _engine: String,
     _model: String,
 ) -> Result<(), String> {
     Err("voice dictation is only available on macOS".into())
 }
 
-fn model_path(app: &AppHandle, model: &str) -> Result<std::path::PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("voice")
-        .join("models");
-    Ok(dir.join(format!("ggml-{model}.bin")))
-}
-
-async fn download_model(
-    window: &tauri::WebviewWindow,
-    url: &str,
-    path: &std::path::Path,
+async fn download_and_extract(
+    window: &WebviewWindow,
+    def: &ModelDef,
+    dest_dir: &std::path::Path,
 ) -> Result<(), String> {
     use futures_util::StreamExt;
 
     let client = reqwest::Client::builder()
         .build()
         .map_err(|e| e.to_string())?;
-    let resp = client.get(url).send().await.map_err(|e| e.to_string())?;
+    let resp = client
+        .get(def.url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
-        return Err(format!("download failed with status {}", resp.status()));
+        return Err(format!(
+            "model download failed with status {}",
+            resp.status()
+        ));
     }
     let total = resp.content_length().unwrap_or(0);
 
-    let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+    let tmp = dest_dir.join(format!("{}.downloading", def.archive));
+    let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
     let mut downloaded: u64 = 0;
     let mut stream = resp.bytes_stream();
 
@@ -178,72 +506,25 @@ async fn download_model(
             );
         }
     }
+    drop(file);
+
+    // Move the temp download to its final archive name, then extract.
+    let archive_path = dest_dir.join(def.archive);
+    std::fs::rename(&tmp, &archive_path).map_err(|e| e.to_string())?;
+
+    let f = std::fs::File::open(&archive_path).map_err(|e| e.to_string())?;
+    let decoder = bzip2::read::BzDecoder::new(f);
+    let mut ar = tar::Archive::new(decoder);
+    ar.unpack(dest_dir).map_err(|e| e.to_string())?;
+    // The archive is large; drop it now that the .onnx files are extracted.
+    let _ = std::fs::remove_file(&archive_path);
+
+    if discover_model_files(dest_dir).is_none() {
+        return Err("extracted model is missing expected .onnx/tokens files".into());
+    }
 
     let _ = window.emit("voice-stt-model", json!({ "status": "ready" }));
     Ok(())
-}
-
-/// Run a single whisper transcription over one complete utterance (16 kHz mono).
-fn transcribe(
-    ctx: &Arc<WhisperContext>,
-    samples: &[f32],
-    language: &str,
-    autopunctuate: bool,
-) -> Result<String, String> {
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-    params.set_print_progress(false);
-    params.set_print_special(false);
-    params.set_print_realtime(false);
-    params.set_print_timestamps(false);
-    if !language.is_empty() {
-        params.set_language(Some(language));
-    }
-    // More decoder threads help on the 8-core M2 (encoder runs on the GPU).
-    let threads = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(4)
-        .clamp(1, 8);
-    params.set_n_threads(threads as i32);
-    // Each utterance is decoded independently: greedy with a small temperature
-    // fallback, no cross-utterance context (prevents hallucination carryover),
-    // and the anti-hallucination thresholds. We allow multiple segments so long
-    // utterances aren't truncated.
-    params.set_temperature(0.0);
-    params.set_temperature_inc(0.2);
-    params.set_no_context(true);
-    params.set_single_segment(false);
-    params.set_suppress_blank(true);
-    params.set_suppress_non_speech_tokens(true);
-    if autopunctuate {
-        params.set_initial_prompt("Add punctuation such as periods, commas, and question marks.");
-    }
-
-    // Whisper refuses inputs shorter than ~1 s; zero-pad so short utterances
-    // still transcribe (and we avoid the "input is too short" spam).
-    let padded: Vec<f32>;
-    let audio: &[f32] = if samples.len() < MIN_TRANSCRIBE_SAMPLES {
-        padded = {
-            let mut v = Vec::with_capacity(MIN_TRANSCRIBE_SAMPLES);
-            v.extend_from_slice(samples);
-            v.resize(MIN_TRANSCRIBE_SAMPLES, 0.0);
-            v
-        };
-        &padded
-    } else {
-        samples
-    };
-
-    let mut state = ctx.create_state().map_err(|e| e.to_string())?;
-    state.full(params, audio).map_err(|e| e.to_string())?;
-
-    let segments = state.full_n_segments().map_err(|e| e.to_string())?;
-    let mut out = String::new();
-    for i in 0..segments {
-        let seg = state.full_get_segment_text(i).map_err(|e| e.to_string())?;
-        out.push_str(seg.trim());
-        out.push(' ');
-    }
-    Ok(out.trim().to_string())
 }
 
 fn rms_of(samples: &[f32]) -> f32 {
@@ -254,112 +535,35 @@ fn rms_of(samples: &[f32]) -> f32 {
     (sum / samples.len() as f32).sqrt()
 }
 
-/// Whisper sometimes emits bracketed non-speech markers (e.g. "[BLANK_AUDIO]",
-/// "(silence)") for near-silent input. Drop utterances that are only that.
-fn is_noise_only(text: &str) -> bool {
-    let t = text.trim();
-    if t.is_empty() {
-        return true;
+/// Drain the shared capture buffer, resample to 16 kHz, and return the resampled
+/// chunk plus the input RMS (for the level meter). `leftover` carries the
+/// remainder that didn't fill a full resampler input frame between ticks.
+fn drain_resample(
+    raw: &Arc<Mutex<Vec<f32>>>,
+    resampler: &mut FftFixedIn<f32>,
+    leftover: &mut Vec<f32>,
+) -> (Vec<f32>, f32) {
+    let captured = {
+        let mut r = raw.lock().unwrap();
+        std::mem::take(&mut *r)
+    };
+    if captured.is_empty() {
+        return (Vec::new(), 0.0);
     }
-    let stripped: String = t
-        .chars()
-        .filter(|c| !matches!(c, '[' | ']' | '(' | ')' | '*' | '_' | ' ' | '.'))
-        .collect();
-    // Common markers whisper produces on silence.
-    let lower = t.to_ascii_lowercase();
-    stripped.is_empty()
-        || lower.contains("blank_audio")
-        || lower == "(silence)"
-        || lower == "[silence]"
-}
-
-/// Voice-activity endpointer. Owned by the worker thread; segments the resampled
-/// stream into utterances and holds the audio for the current one.
-struct Endpointer {
-    /// Resampled 16 kHz mono audio for the current (in-progress) utterance,
-    /// including a short pre-pad of leading silence for context.
-    buf: Vec<f32>,
-    /// Samples already classified by the VAD (frame-aligned).
-    analyzed: usize,
-    /// Slow EMA of background noise, used as an adaptive speech threshold.
-    noise_floor: f32,
-    in_speech: bool,
-    speech_samples: usize,
-    silence_run: usize,
-    /// Peak amplitude observed since the last level emit (drives the meter).
-    peak_level: f32,
-}
-
-impl Endpointer {
-    fn new() -> Self {
-        Endpointer {
-            buf: Vec::new(),
-            analyzed: 0,
-            noise_floor: 0.004,
-            in_speech: false,
-            speech_samples: 0,
-            silence_run: 0,
-            peak_level: 0.0,
+    let rms = rms_of(&captured);
+    leftover.extend(captured);
+    let mut out: Vec<f32> = Vec::new();
+    loop {
+        let need = resampler.input_frames_next();
+        if leftover.len() < need {
+            break;
+        }
+        let chunk: Vec<f32> = leftover.drain(..need).collect();
+        if let Ok(o) = resampler.process(&[chunk], None) {
+            out.extend_from_slice(&o[0]);
         }
     }
-
-    fn reset_utterance(&mut self) {
-        self.buf.clear();
-        self.analyzed = 0;
-        self.in_speech = false;
-        self.speech_samples = 0;
-        self.silence_run = 0;
-    }
-
-    /// Feed newly resampled audio and update VAD state.
-    fn push(&mut self, samples: &[f32]) {
-        self.buf.extend_from_slice(samples);
-        while self.analyzed + FRAME <= self.buf.len() {
-            let frame = &self.buf[self.analyzed..self.analyzed + FRAME];
-            let rms = rms_of(frame);
-            if rms > self.peak_level {
-                self.peak_level = rms;
-            }
-            let threshold = (self.noise_floor * VOICE_MULT).max(MIN_VOICE_RMS);
-            if rms > threshold {
-                self.in_speech = true;
-                self.speech_samples += FRAME;
-                self.silence_run = 0;
-            } else {
-                // Adapt the noise floor only while not clearly in speech.
-                self.noise_floor = (self.noise_floor * 0.97 + rms * 0.03).clamp(0.0008, 0.05);
-                if self.in_speech {
-                    self.silence_run += FRAME;
-                }
-            }
-            self.analyzed += FRAME;
-        }
-
-        // While we haven't heard speech yet, keep only a short pre-pad so the
-        // buffer doesn't grow during long pre-speech silence.
-        if !self.in_speech && self.buf.len() > PRE_PAD_SAMPLES {
-            let drop = self.buf.len() - PRE_PAD_SAMPLES;
-            self.buf.drain(0..drop);
-            self.analyzed = self.analyzed.saturating_sub(drop);
-        }
-    }
-
-    /// Returns true when the current utterance is complete and should be
-    /// transcribed (a real pause, or the max length was reached).
-    fn utterance_ready(&self) -> bool {
-        self.in_speech
-            && self.speech_samples >= MIN_SPEECH_SAMPLES
-            && (self.silence_run >= ENDPOINT_SILENCE_SAMPLES
-                || self.buf.len() >= MAX_UTTERANCE_SAMPLES)
-    }
-
-    /// Take the current level (0..1) and reset the peak for the next window.
-    fn take_level(&mut self) -> f32 {
-        // Perceptual-ish mapping: sqrt gives a livelier meter at low volumes.
-        let level = (self.peak_level.sqrt() * 2.6).clamp(0.0, 1.0);
-        self.peak_level = 0.0;
-        level
-    }
+    (out, (rms * 2.6).clamp(0.0, 1.0))
 }
 
 /// Pick an f32-capable input config at the device's *default* sample rate
@@ -390,53 +594,65 @@ fn f32_input_config(device: &Device) -> Result<StreamConfig, String> {
     Ok(chosen.with_sample_rate(sr).into())
 }
 
-/// Worker thread body: capture → resample → VAD segment → transcribe → emit.
-/// Everything slow happens here (never the UI thread), so the editor stays
-/// responsive; on stop we do one final flush of any trailing speech.
+/// Streaming worker body: capture → resample → `OnlineRecognizer` decode →
+/// emit. Everything slow happens here (never the UI thread), so the editor
+/// stays responsive. The recognizer + stream are created here (not moved from
+/// the command thread) so we never rely on the recognizer being `Send`.
 #[allow(clippy::too_many_arguments)]
-fn run_worker(
+fn run_streaming_worker(
     rt: Arc<Mutex<VoiceRuntime>>,
     window: WebviewWindow,
     raw: Arc<Mutex<Vec<f32>>>,
     cancel: Arc<AtomicBool>,
-    ctx: Arc<WhisperContext>,
+    files: (PathBuf, PathBuf, PathBuf, PathBuf),
     mut resampler: FftFixedIn<f32>,
-    language: String,
-    autopunctuate: bool,
     my_epoch: u64,
 ) {
     let debug = std::env::var("VOICE_STT_DEBUG").is_ok();
-    let mut leftover: Vec<f32> = Vec::new();
-    let mut ep = Endpointer::new();
+
+    let mut config = sherpa_onnx::OnlineRecognizerConfig::default();
+    config.model_config.transducer.encoder = Some(files.0.to_string_lossy().into_owned());
+    config.model_config.transducer.decoder = Some(files.1.to_string_lossy().into_owned());
+    config.model_config.transducer.joiner = Some(files.2.to_string_lossy().into_owned());
+    config.model_config.tokens = Some(files.3.to_string_lossy().into_owned());
+    // NeMo Transducer family (RNN-T / TDT).
+    config.model_config.model_type = Some("nemo_transducer".into());
+    // CPU is plenty fast for these INT8 models on Apple Silicon; avoids GPU
+    // provider setup and keeps latency predictable.
+    config.model_config.provider = Some("cpu".into());
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .clamp(1, 8);
+    config.model_config.num_threads = threads as i32;
+    config.enable_endpoint = true;
+    config.decoding_method = Some("greedy_search".into());
+    config.feat_config.sample_rate = 16_000;
+    // Snappier commits: end an utterance after a short trailing silence so the
+    // overlay finalizes without an awkward delay, but not mid-word.
+    config.rule1_min_trailing_silence = 0.4;
+    config.rule2_min_trailing_silence = 0.8;
+    config.rule3_min_utterance_length = 0.8;
+
+    let recognizer = match OnlineRecognizer::create(&config) {
+        Some(r) => r,
+        None => {
+            let _ = window.emit(
+                "voice-stt-status",
+                json!({ "status": "error", "message": "failed to load speech model" }),
+            );
+            return;
+        }
+    };
+    let stream = recognizer.create_stream();
 
     let still_mine = |rt: &Arc<Mutex<VoiceRuntime>>| -> bool {
         let g = rt.lock().unwrap();
         g.epoch == my_epoch
     };
 
-    let emit_utterance = |ep: &mut Endpointer, rt: &Arc<Mutex<VoiceRuntime>>| {
-        let audio = std::mem::take(&mut ep.buf);
-        ep.reset_utterance();
-        if audio.is_empty() {
-            return;
-        }
-        match transcribe(&ctx, &audio, &language, autopunctuate) {
-            Ok(text) => {
-                if debug {
-                    eprintln!("[voice-stt] utterance {} samples -> '{text}'", audio.len());
-                }
-                if !is_noise_only(&text) && still_mine(rt) {
-                    let _ = window.emit("voice-stt-delta", json!({ "text": text }));
-                }
-            }
-            Err(e) => {
-                let _ = window.emit(
-                    "voice-stt-status",
-                    json!({ "status": "error", "message": e }),
-                );
-            }
-        }
-    };
+    let mut leftover: Vec<f32> = Vec::new();
+    let mut last_emitted = String::new();
 
     loop {
         thread::sleep(WORKER_TICK);
@@ -444,43 +660,174 @@ fn run_worker(
             break;
         }
 
-        // 1. Drain captured audio and resample into 16 kHz mono.
-        let captured = {
-            let mut r = raw.lock().unwrap();
-            std::mem::take(&mut *r)
-        };
-        if !captured.is_empty() {
-            leftover.extend(captured);
-            let mut out: Vec<f32> = Vec::new();
-            loop {
-                let need = resampler.input_frames_next();
-                if leftover.len() < need {
-                    break;
-                }
-                let chunk: Vec<f32> = leftover.drain(..need).collect();
-                if let Ok(o) = resampler.process(&[chunk], None) {
-                    out.extend_from_slice(&o[0]);
+        // 1. Drain captured audio, resample to 16 kHz, feed the model.
+        let (out, level) = drain_resample(&raw, &mut resampler, &mut leftover);
+        if !out.is_empty() {
+            stream.accept_waveform(TARGET_SAMPLE_RATE as i32, &out);
+        }
+
+        // 2. Decode available frames and stream the live hypothesis.
+        while recognizer.is_ready(&stream) {
+            recognizer.decode(&stream);
+            if let Some(result) = recognizer.get_result(&stream) {
+                let t = result.text.trim().to_string();
+                if !t.is_empty() && t != last_emitted {
+                    last_emitted = t.clone();
+                    if debug {
+                        eprintln!("[voice-stt] partial: '{t}'");
+                    }
+                    let _ = window.emit("voice-stt-partial", json!({ "text": t }));
                 }
             }
-            ep.push(&out);
+
+            // 3. Utterance ended: commit the final text and reset for the next.
+            if recognizer.is_endpoint(&stream) {
+                if let Some(result) = recognizer.get_result(&stream) {
+                    let t = result.text.trim().to_string();
+                    if !t.is_empty() {
+                        if debug {
+                            eprintln!("[voice-stt] final: '{t}'");
+                        }
+                        let _ = window.emit("voice-stt-final", json!({ "text": t }));
+                    }
+                }
+                recognizer.reset(&stream);
+                last_emitted.clear();
+                // Clear the overlay now that the text is committed.
+                let _ = window.emit("voice-stt-partial", json!({ "text": "" }));
+            }
         }
 
-        // 2. Drive the animated indicator with the live input level.
-        let level = ep.take_level();
+        // 4. Drive the animated indicator with the live input level.
         let _ = window.emit("voice-stt-level", json!({ "level": level }));
-
-        // 3. Flush a complete utterance if the speaker paused.
-        if ep.utterance_ready() {
-            emit_utterance(&mut ep, &rt);
-        }
     }
 
-    // Final flush: transcribe any trailing speech captured before stop.
-    if still_mine(&rt) && ep.in_speech && ep.speech_samples >= FRAME * 2 {
-        emit_utterance(&mut ep, &rt);
-    }
+    // Final flush: feed a short tail of silence so any trailing frames decode,
+    // then commit whatever is left (only if it differs from the last commit).
     if still_mine(&rt) {
+        let pad = vec![0.0f32; TARGET_SAMPLE_RATE / 3]; // ~0.33 s
+        stream.accept_waveform(TARGET_SAMPLE_RATE as i32, &pad);
+        stream.input_finished();
+        while recognizer.is_ready(&stream) {
+            recognizer.decode(&stream);
+            if let Some(result) = recognizer.get_result(&stream) {
+                let t = result.text.trim().to_string();
+                if !t.is_empty() && t != last_emitted {
+                    let _ = window.emit("voice-stt-final", json!({ "text": t }));
+                }
+            }
+        }
         let _ = window.emit("voice-stt-status", json!({ "status": "idle" }));
+    }
+}
+
+/// Offline worker body for non-streaming Transducers (e.g. Parakeet TDT). These
+/// models can't be driven by the `OnlineRecognizer`, so we buffer the resampled
+/// audio for the current utterance and run it through the `OfflineRecognizer`
+/// once a trailing-silence pause is detected (or when dictation stops). The
+/// result is emitted as a final transcript; there are no live partials.
+#[allow(clippy::too_many_arguments)]
+fn run_offline_worker(
+    rt: Arc<Mutex<VoiceRuntime>>,
+    window: WebviewWindow,
+    raw: Arc<Mutex<Vec<f32>>>,
+    cancel: Arc<AtomicBool>,
+    files: (PathBuf, PathBuf, PathBuf, PathBuf),
+    mut resampler: FftFixedIn<f32>,
+    my_epoch: u64,
+) {
+    let debug = std::env::var("VOICE_STT_DEBUG").is_ok();
+
+    let mut config = sherpa_onnx::OfflineRecognizerConfig::default();
+    config.model_config.transducer.encoder = Some(files.0.to_string_lossy().into_owned());
+    config.model_config.transducer.decoder = Some(files.1.to_string_lossy().into_owned());
+    config.model_config.transducer.joiner = Some(files.2.to_string_lossy().into_owned());
+    config.model_config.tokens = Some(files.3.to_string_lossy().into_owned());
+    // NeMo Transducer family (RNN-T / TDT), offline path.
+    config.model_config.model_type = Some("nemo_transducer".into());
+    config.model_config.provider = Some("cpu".into());
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .clamp(1, 8);
+    config.model_config.num_threads = threads as i32;
+    config.decoding_method = Some("greedy_search".into());
+    config.feat_config.sample_rate = 16_000;
+
+    let recognizer = match OfflineRecognizer::create(&config) {
+        Some(r) => r,
+        None => {
+            let _ = window.emit(
+                "voice-stt-status",
+                json!({ "status": "error", "message": "failed to load speech model" }),
+            );
+            return;
+        }
+    };
+
+    let still_mine = |rt: &Arc<Mutex<VoiceRuntime>>| -> bool {
+        let g = rt.lock().unwrap();
+        g.epoch == my_epoch
+    };
+
+    let mut leftover: Vec<f32> = Vec::new();
+    // Resampled audio accumulated for the current utterance.
+    let mut buffer: Vec<f32> = Vec::new();
+    // Consecutive silent samples seen in the current utterance.
+    let mut silence: usize = 0;
+    const SILENCE_LIMIT: usize = (TARGET_SAMPLE_RATE as f32 * 0.7) as usize; // ~0.7 s
+
+    loop {
+        thread::sleep(WORKER_TICK);
+        if cancel.load(Ordering::SeqCst) || !still_mine(&rt) {
+            break;
+        }
+
+        let (out, level) = drain_resample(&raw, &mut resampler, &mut leftover);
+        if !out.is_empty() {
+            buffer.extend_from_slice(&out);
+            if rms_of(&out) < 0.01 {
+                silence += out.len();
+            } else {
+                silence = 0;
+            }
+        }
+
+        // End of utterance: enough trailing silence and we have audio to decode.
+        if !buffer.is_empty() && silence >= SILENCE_LIMIT {
+            run_offline_decode(&recognizer, &window, &buffer, debug);
+            buffer.clear();
+            silence = 0;
+        }
+
+        let _ = window.emit("voice-stt-level", json!({ "level": level }));
+    }
+
+    // Final flush: a trailing utterance with no silence tail yet still decodes.
+    if still_mine(&rt) && !buffer.is_empty() {
+        run_offline_decode(&recognizer, &window, &buffer, debug);
+    }
+    let _ = window.emit("voice-stt-status", json!({ "status": "idle" }));
+}
+
+/// Run one offline decode over a full utterance and emit the transcript.
+fn run_offline_decode(
+    recognizer: &OfflineRecognizer,
+    window: &WebviewWindow,
+    samples: &[f32],
+    debug: bool,
+) {
+    let stream = recognizer.create_stream();
+    stream.accept_waveform(TARGET_SAMPLE_RATE as i32, samples);
+    recognizer.decode(&stream);
+    if let Some(result) = stream.get_result() {
+        let t = result.text.trim().to_string();
+        if !t.is_empty() {
+            if debug {
+                eprintln!("[voice-stt] offline final: '{t}'");
+            }
+            let _ = window.emit("voice-stt-final", json!({ "text": t }));
+        }
     }
 }
 
@@ -488,38 +835,25 @@ fn run_worker(
 #[tauri::command]
 pub fn voice_stt_start(
     window: WebviewWindow,
+    engine: String,
     model: String,
-    language: String,
-    autopunctuate: bool,
+    _language: String,
+    _autopunctuate: bool,
 ) -> Result<(), String> {
-    let app = window.app_handle();
-    let path = model_path(app, &model)?;
-    if !path.exists() {
-        return Err("model-not-ready".into());
+    // Apple native engine: no cpal/sherpa setup — the ObjC bridge owns capture.
+    if engine == ENGINE_APPLE {
+        return start_apple(window, model);
     }
+
+    let def = model_def(&model).ok_or_else(|| format!("unknown dictation model: {model}"))?;
+    let app = window.app_handle();
+    let dir = model_dir(app, &model)?;
+    let files = discover_model_files(&dir).ok_or("model-not-ready".to_string())?;
 
     let rt = runtime();
     let mut guard = rt.lock().unwrap();
     if guard.running {
         return Ok(());
-    }
-
-    // (Re)load the whisper context only when the model changed.
-    if guard.context.is_none() || guard.model != model {
-        let path_str = path
-            .to_str()
-            .ok_or_else(|| "invalid model path".to_string())?;
-        let ctx_params = WhisperContextParameters {
-            // Run the encoder on the Apple Metal GPU — the single biggest
-            // speedup (CPU-only decoding is many times slower).
-            use_gpu: true,
-            ..Default::default()
-        };
-        let ctx = whisper_rs::WhisperContext::new_with_params(path_str, ctx_params)
-            .map_err(|e| e.to_string())
-            .map(Arc::new)?;
-        guard.context = Some(ctx);
-        guard.model = model.clone();
     }
 
     let host = cpal::default_host();
@@ -574,24 +908,35 @@ pub fn voice_stt_start(
 
     guard.stream = Some(AudioStream(stream));
     guard.running = true;
+    guard.model = model.clone();
     guard.epoch = guard.epoch.wrapping_add(1);
     let my_epoch = guard.epoch;
 
-    let ctx = Arc::clone(guard.context.as_ref().expect("context set above"));
     let rt_for_worker = Arc::clone(&rt);
     let worker_window = window.clone();
+    let streaming = def.streaming;
     guard.worker = Some(thread::spawn(move || {
-        run_worker(
-            rt_for_worker,
-            worker_window,
-            raw,
-            cancel,
-            ctx,
-            resampler,
-            language,
-            autopunctuate,
-            my_epoch,
-        );
+        if streaming {
+            run_streaming_worker(
+                rt_for_worker,
+                worker_window,
+                raw,
+                cancel,
+                files,
+                resampler,
+                my_epoch,
+            );
+        } else {
+            run_offline_worker(
+                rt_for_worker,
+                worker_window,
+                raw,
+                cancel,
+                files,
+                resampler,
+                my_epoch,
+            );
+        }
     }));
 
     let _ = window.emit("voice-stt-status", json!({ "status": "listening" }));
@@ -602,6 +947,7 @@ pub fn voice_stt_start(
 #[tauri::command]
 pub fn voice_stt_start(
     _window: WebviewWindow,
+    _engine: String,
     _model: String,
     _language: String,
     _autopunctuate: bool,
@@ -611,8 +957,13 @@ pub fn voice_stt_start(
 
 #[cfg(target_os = "macos")]
 #[tauri::command]
-pub fn voice_stt_stop(_window: WebviewWindow) -> Result<(), String> {
+pub fn voice_stt_stop(window: WebviewWindow) -> Result<(), String> {
     let rt = runtime();
+    // Apple native engine has no cpal stream / worker; tear it down separately.
+    if rt.lock().unwrap().apple.is_some() {
+        stop_apple(&window);
+        return Ok(());
+    }
     {
         let mut g = rt.lock().unwrap();
         if !g.running {
@@ -622,8 +973,7 @@ pub fn voice_stt_stop(_window: WebviewWindow) -> Result<(), String> {
         // Dropping the stream stops capture immediately. We deliberately do NOT
         // join the worker here: it runs on its own thread, sees `cancel`, does
         // the final flush + emits `idle` there, then exits. Joining on this
-        // (UI) thread would block the editor while a (possibly long) final
-        // transcription runs, which is the freeze-on-stop bug.
+        // (UI) thread would block the editor while the final decode runs.
         g.stream.take();
         g.running = false;
         let _ = g.worker.take(); // detach; the thread keeps running to completion

@@ -270,8 +270,13 @@ export type VoiceSttModelStatus =
   | { status: "ready" }
   | { status: "error"; message: string };
 
-export interface VoiceSttDelta {
-  /** Incremental, already-committed text to append at the cursor. */
+export interface VoiceSttPartial {
+  /** Live, replaceable hypothesis shown as a greyed overlay at the cursor. */
+  text: string;
+}
+
+export interface VoiceSttFinal {
+  /** Finalized utterance text to commit into the document. */
   text: string;
 }
 
@@ -285,19 +290,25 @@ export interface VoiceSttStatus {
   message?: string;
 }
 
-/** Download the whisper model if missing. Progress arrives via the
- *  `voice-stt-model` event. */
-export function voiceSttEnsureModel(model: string): Promise<void> {
-  return invoke("voice_stt_ensure_model", { model });
+/** Dictation engine: `sherpa` (downloaded NeMo Transducer models) or
+ *  `apple-native` (Apple's on-device SFSpeechRecognizer, no download). */
+export type VoiceSttEngine = "sherpa" | "apple-native";
+
+/** Ensure the engine is ready: for `sherpa`, download the model if missing;
+ *  for `apple-native`, request speech-recognition authorization. Readiness (or
+ *  failure) arrives via the `voice-stt-model` event. */
+export function voiceSttEnsureModel(engine: VoiceSttEngine, model: string): Promise<void> {
+  return invoke("voice_stt_ensure_model", { engine, model });
 }
 
 /** Begin microphone capture + streaming transcription. */
 export function voiceSttStart(
+  engine: VoiceSttEngine,
   model: string,
   language: string,
   autopunctuate: boolean,
 ): Promise<void> {
-  return invoke("voice_stt_start", { model, language, autopunctuate });
+  return invoke("voice_stt_start", { engine, model, language, autopunctuate });
 }
 
 /** Stop capture and emit the final transcript. */

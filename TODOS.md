@@ -2,6 +2,8 @@
 
 ## In Progress
 
+- Streaming dictation via sherpa-onnx + native Apple engine (replace Whisper): [`SPECs/voice-sherpa-onnx-streaming-spec.md`](SPECs/voice-sherpa-onnx-streaming-spec.md) — swapped whisper-rs for the official `sherpa-onnx` Rust crate with two decode paths (streaming `OnlineRecognizer` for Nemotron → live partials; `OfflineRecognizer` per-utterance for Parakeet TDT), plus a third `apple-native` engine using Apple's on-device `SFSpeechRecognizer` via an Objective-C bridge (no model download). Engine + model switchable from a picker on the dictation pill. Code + build (`cargo build`/`clippy`, `vp check`) pass; **awaiting on-device live-dictation verification of all three engines on macOS.**
+
 - Reveal-in-sidebar + residual external-watcher misses: [`SPECs/reveal-in-sidebar-and-external-watcher-spec.md`](SPECs/reveal-in-sidebar-and-external-watcher-spec.md) — keep the explicit tab-context-menu "Reveal in sidebar" action working, leave ordinary file opens from expanding the Everything tree, and characterize the remaining external-file-watcher miss cases through a logging + manual-repro pass before patching further.
 
 ## Done

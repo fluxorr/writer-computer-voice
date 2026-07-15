@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-07-15
+
+- Dictation engines: choose between local **sherpa-onnx** models and Apple's built-in speech recognition. The sherpa engine now runs two on-device NeMo Transducer models — **Nemotron** streams word-by-word for live, low-latency partial text, while **Parakeet TDT** transcribes each phrase when you pause (higher accuracy, no live preview). A new **Apple** engine uses macOS's on-device `SFSpeechRecognizer` with nothing to download. Switch engine and model on the fly from a small picker on the dictation indicator, or set the defaults under Voice settings. Dictation stays fully offline for all engines; the Apple engine additionally requests speech-recognition permission (`NSSpeechRecognitionUsageDescription`) the first time you use it.
+- Fixed a crash when selecting the Apple dictation engine in a build whose `Info.plist` lacks the speech-recognition / microphone usage descriptions (e.g. an unbundled dev binary). macOS hard-kills a process that requests these permissions without the matching usage-description key. The macOS build now embeds `Info.plist` into the executable's `__TEXT,__info_plist` section, so even the unbundled `tauri dev` binary carries the usage descriptions and Apple dictation works in development. As a safety net, the Apple bridge still detects missing keys up front and surfaces a clear dictation error instead of aborting the app.
+
 ## 2026-07-13
 
 - Voice read-aloud (TTS). A new Voice settings category controls the TTS voice, rate, pitch, and read scope (cursor / selection / document); the chosen scope is remembered between uses. Trigger read-aloud from the command palette ("Read Aloud") or the `Cmd+Shift+R` shortcut (remappable in settings). While speaking, a small mini-player offers play/pause, stop, a scope switch, and a speed slider, and the currently-spoken word is highlighted in the editor (karaoke) and scrolled into view. On macOS the WebView's Web Speech API uses the system's offline voices, so read-aloud stays local-first.

@@ -31,6 +31,8 @@
     </dict>
   </array>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Writer uses the microphone for offline voice dictation.</string>
+  <string>Speakdown uses the microphone for offline voice dictation.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Speakdown uses on-device speech recognition to transcribe your dictation.</string>
 </dict>
 </plist>

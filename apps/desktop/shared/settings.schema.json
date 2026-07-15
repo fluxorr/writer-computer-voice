@@ -337,35 +337,34 @@
     {
       "key": "voice.stt.language",
       "label": "Dictation Language",
-      "description": "Fixed language for dictation (Whisper language code).",
+      "description": "Reserved for future multi-language models. The streaming NeMo Transducer models used for dictation are English-focused, so this is currently unused.",
       "category": "Voice",
       "type": "enum",
       "options": ["en", "es", "fr", "de", "it", "pt", "nl", "ru", "zh", "ja", "ko", "ar"],
       "default": "en"
     },
     {
-      "key": "voice.stt.model",
-      "label": "Dictation Model",
-      "description": "Whisper model for dictation. Smaller = faster/lower latency; .en models are English-only and faster. Downloaded on first use and cached.",
+      "key": "voice.stt.engine",
+      "label": "Dictation Engine",
+      "description": "Which speech engine transcribes dictation. sherpa runs downloadable on-device NeMo Transducer models (choose one below). apple-native uses Apple's built-in on-device speech recognition — no download, but the model choice below is ignored.",
       "category": "Voice",
       "type": "enum",
-      "options": [
-        "base.en",
-        "small.en",
-        "small.en-q8_0",
-        "medium.en-q8_0",
-        "tiny.en",
-        "base",
-        "small",
-        "medium",
-        "large-v3-turbo-q8_0"
-      ],
-      "default": "base.en"
+      "options": ["sherpa", "apple-native"],
+      "default": "sherpa"
+    },
+    {
+      "key": "voice.stt.model",
+      "label": "Dictation Model",
+      "description": "On-device speech model for the sherpa engine (sherpa-onnx / NeMo Transducer), downloaded on first use and cached locally. Nemotron streams frame-by-frame (live partial text, lowest latency); Parakeet TDT is a larger, multilingual model that transcribes per utterance (commits when you pause — no live partial). Ignored when the engine is apple-native.",
+      "category": "Voice",
+      "type": "enum",
+      "options": ["nemotron-streaming", "parakeet-tdt-v3"],
+      "default": "nemotron-streaming"
     },
     {
       "key": "voice.stt.autopunctuate",
       "label": "Dictation Auto-Punctuate",
-      "description": "Automatically insert punctuation and expand spoken formatting commands.",
+      "description": "Reserved for future use. The NeMo Transducer models auto-punctuate their output, so this is currently unused.",
       "category": "Voice",
       "type": "boolean",
       "default": true
