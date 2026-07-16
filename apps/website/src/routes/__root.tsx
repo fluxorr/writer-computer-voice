@@ -3,12 +3,13 @@
 import type { ReactNode } from "react";
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 
+import { Header } from "../components/Header";
+import { Footer } from "../components/Footer";
 import styles from "../styles.css?url";
 
-const TITLE = "Writer — Fast and lightweight markdown editor";
+const TITLE = "Speakdown — Offline voice dictation for your markdown";
 const DESCRIPTION =
-  "Fast and lightweight app for your workspace's markdown files. Local-first. macOS.";
-const OG_DESCRIPTION = "Fast and lightweight app for your workspace's markdown files.";
+  "A local-first markdown editor with on-device voice dictation. Speak naturally, write effortlessly. Free and open source.";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -17,17 +18,25 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1.0" },
       { title: TITLE },
       { name: "description", content: DESCRIPTION },
-      { property: "og:title", content: "Writer" },
-      { property: "og:description", content: OG_DESCRIPTION },
+      { property: "og:title", content: "Speakdown" },
+      { property: "og:description", content: DESCRIPTION },
       { property: "og:type", content: "website" },
-      { property: "og:url", content: "https://writer.computer" },
-      { property: "og:image", content: "https://writer.computer/og.jpg" },
+      { property: "og:url", content: "https://speakdown.byflux.me" },
+      { property: "og:image", content: "https://speakdown.byflux.me/og.png" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:image", content: "https://writer.computer/og.jpg" },
+      { name: "twitter:image", content: "https://speakdown.byflux.me/og.png" },
     ],
     links: [
       { rel: "icon", type: "image/png", href: "/favicon.png" },
       { rel: "stylesheet", href: styles },
+      {
+        rel: "preconnect",
+        href: "https://api.fontshare.com",
+      },
+      {
+        rel: "stylesheet",
+        href: "https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,600,700&display=swap",
+      },
     ],
   }),
   component: RootComponent,
@@ -43,12 +52,14 @@ function RootComponent() {
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark">
       <head>
         <HeadContent />
       </head>
       <body>
-        {children}
+        <Header />
+        <main>{children}</main>
+        <Footer />
         <script
           defer
           src="https://umami.highpath.studio/script.js"

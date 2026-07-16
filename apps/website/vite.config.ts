@@ -12,11 +12,11 @@ const tauriConf = JSON.parse(readFileSync(tauriConfPath, "utf-8")) as {
   version: string;
 };
 
-const RELEASE_REPO = "joelbqz/writer-computer";
+const RELEASE_REPO = "fluxorr/speakdown";
 const VERSION = tauriConf.version;
-const DMG_URL = `https://github.com/${RELEASE_REPO}/releases/download/v${VERSION}/Writer_${VERSION}_aarch64.dmg`;
+const DMG_URL = `https://github.com/${RELEASE_REPO}/releases/download/v${VERSION}/Speakdown_${VERSION}_aarch64.dmg`;
 const RELEASES_URL = `https://github.com/${RELEASE_REPO}/releases/tag/v${VERSION}`;
-const REPO_URL = "https://github.com/joelbqz/writer-computer";
+const REPO_URL = "https://github.com/fluxorr/speakdown";
 
 export default defineConfig({
   plugins: [
