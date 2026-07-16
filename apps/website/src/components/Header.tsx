@@ -1,92 +1,59 @@
+"use client";
+
 import { useEffect, useState } from "react";
 
-function useTheme() {
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
-    if (typeof document === "undefined") return "dark";
-    return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
-  });
+export function Header() {
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
-  const toggle = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
-
-  return { theme, toggle };
-}
-
-function MoonIcon() {
   return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
+    <header
+      className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
+      style={{
+        background: scrolled ? "var(--header-bg)" : "transparent",
+        backdropFilter: scrolled ? "blur(20px)" : "none",
+        WebkitBackdropFilter: scrolled ? "blur(20px)" : "none",
+        borderBottom: scrolled ? "1px solid var(--border)" : "1px solid transparent",
+      }}
     >
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
-  );
-}
-
-function SunIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="5" />
-      <line x1="12" y1="1" x2="12" y2="3" />
-      <line x1="12" y1="21" x2="12" y2="23" />
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-      <line x1="1" y1="12" x2="3" y2="12" />
-      <line x1="21" y1="12" x2="23" y2="12" />
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-    </svg>
-  );
-}
-
-export function Header() {
-  const { theme, toggle } = useTheme();
-
-  return (
-    <header className="site-header">
-      <div className="container">
-        <a href="/" className="site-logo">
-          <img src="/logo.png" alt="Speakdown" width="24" height="24" className="site-logo-icon" />
-          Speakdown
+      <div className="mx-auto flex items-center h-14 gap-6 max-w-6xl px-6">
+        <a href="/" className="flex items-center gap-2 shrink-0">
+          <img src="/logo.png" alt="" width="20" height="20" className="rounded" />
+          <span
+            className="text-sm font-semibold"
+            style={{ fontFamily: '"Satoshi", system-ui, sans-serif', color: "var(--ink)" }}
+          >
+            Speakdown
+          </span>
         </a>
 
-        <nav className="site-nav">
-          <a href="#features">Features</a>
-          <a href="#download">Download</a>
-          <a href="#roadmap">Roadmap</a>
-          <a href={__WRITER_REPO_URL__} target="_blank" rel="noopener noreferrer">
-            GitHub
-          </a>
+        <nav className="flex items-center gap-1 ml-auto">
+          {[
+            { label: "Features", href: "#features" },
+            { label: "Download", href: "#download" },
+            { label: "Roadmap", href: "#roadmap" },
+            { label: "GitHub", href: __WRITER_REPO_URL__, external: true },
+          ].map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              target={link.external ? "_blank" : undefined}
+              rel={link.external ? "noopener noreferrer" : undefined}
+              className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+              style={{ color: "var(--ink-secondary)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--ink)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ink-secondary)")}
+            >
+              {link.label}
+            </a>
+          ))}
         </nav>
-
-        <button
-          className="theme-toggle"
-          onClick={toggle}
-          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          title={theme === "dark" ? "Light mode" : "Dark mode"}
-        >
-          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-        </button>
       </div>
     </header>
   );
