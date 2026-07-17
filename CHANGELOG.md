@@ -2,6 +2,8 @@
 
 ## 2026-07-17
 
+- Recent files on the launcher / new-tab page: when you open a fresh tab, the last 10 files you opened appear below the action buttons with title, parent path, and relative time. Click one to open it.
+- Document date display now auto-refreshes every 60 seconds, so "Updated 2 minutes ago" stays accurate while the document is open.
 - Document date display: shows "Updated 2 minutes ago" (and optionally "Created Jul 17") below the frontmatter panel in the editor, sourced from filesystem timestamps or frontmatter `date`/`updated` fields. Relative time is used for recent changes (under 7 days); older timestamps fall back to absolute dates. A small `read_file_metadata` Rust command serves birthtime and mtime over IPC.
 
 ## 2026-07-15

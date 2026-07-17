@@ -11,12 +11,14 @@ export interface DocumentMetadataLabels {
 
 /** Load filesystem metadata (created/modified timestamps) for the given file
  *  path and merge with frontmatter-sourced display dates. Returns formatted
- *  labels suitable for rendering near the document title. */
+ *  labels suitable for rendering near the document title. Labels are
+ *  re-computed every 60 seconds so relative times stay current. */
 export function useDocumentMetadata(path: string | null): DocumentMetadataLabels {
   const displayDate = useEditorStore(
     (s) => (path ? s.openFiles.get(path)?.displayDate : undefined) ?? null,
   );
   const [fsMeta, setFsMeta] = useState<FileMetadata | null>(null);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     setFsMeta(null);
@@ -36,9 +38,18 @@ export function useDocumentMetadata(path: string | null): DocumentMetadataLabels
     };
   }, [path]);
 
-  const updatedLabel = fsMeta ? formatRelativeOrAbsolute(fsMeta.modified_at) : null;
+  // Refresh the relative-time labels every 60 seconds so "2 mins ago" does
+  // not stay frozen until the next file change.
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const nowSecs = Math.floor(Date.now() / 1000);
+  const updatedLabel = fsMeta ? formatRelativeOrAbsolute(fsMeta.modified_at, nowSecs) : null;
   const createdLabel =
-    displayDate ?? (fsMeta?.created_at ? formatRelativeOrAbsolute(fsMeta.created_at) : null);
+    displayDate ??
+    (fsMeta?.created_at ? formatRelativeOrAbsolute(fsMeta.created_at, nowSecs) : null);
 
   return { updatedLabel, createdLabel };
 }
