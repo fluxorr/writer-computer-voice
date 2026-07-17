@@ -60,7 +60,7 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 #### Content features
 
 - [ ] Tags: [`SPECs/tags-spec.md`](SPECs/tags-spec.md)
-- [ ] New tab recent files: [`SPECs/new-tab-recent-files-spec.md`](SPECs/new-tab-recent-files-spec.md)
+- [x] New tab recent files: [`SPECs/new-tab-recent-files-spec.md`](SPECs/new-tab-recent-files-spec.md)
 - [x] Document date display: [`SPECs/document-date-display-spec.md`](SPECs/document-date-display-spec.md)
 
 #### Visual and media polish
