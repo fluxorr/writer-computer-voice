@@ -3,7 +3,7 @@ import type { DocumentStats } from "@/lib/document-stats";
 
 export type { OpenFile, Tab, Location, FileLocation, SessionTab } from "@/stores/editor-store";
 
-const EMPTY_STATS: DocumentStats = { words: 0, characters: 0, paragraphs: 0 };
+const EMPTY_STATS: DocumentStats = { words: 0, characters: 0, paragraphs: 0, readingTime: 0 };
 
 export function useOpenTabs() {
   return useEditorStore((s) => s.tabs);

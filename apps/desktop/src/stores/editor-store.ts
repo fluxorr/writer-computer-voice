@@ -124,7 +124,7 @@ export function createSettingsTab(id = createTabId()): Tab {
   return { id, location: { kind: "settings" }, back: [], forward: [] };
 }
 
-const EMPTY_STATS: DocumentStats = { words: 0, characters: 0, paragraphs: 0 };
+const EMPTY_STATS: DocumentStats = { words: 0, characters: 0, paragraphs: 0, readingTime: 0 };
 
 function createLoadingFile(path: string): OpenFile {
   return {

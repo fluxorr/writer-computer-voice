@@ -14,6 +14,10 @@ export function DocumentFooter({ filePath }: { filePath: string }) {
 
   return (
     <div className="flex absolute bottom-0 w-full z-10 h-11 shrink-0 items-center justify-end gap-5 px-6 text-[13px] leading-[1.15] text-[var(--text-muted)] md:px-8">
+      <span className="flex items-center gap-1 text-[var(--text-muted)]">
+        <span className="text-[var(--text-muted)]">{stats.readingTime} min</span>
+        <span>read</span>
+      </span>
       <FooterMetric label="words" value={stats.words} />
       <FooterMetric label="characters" value={stats.characters} />
       <FooterMetric label="paragraphs" value={stats.paragraphs} />

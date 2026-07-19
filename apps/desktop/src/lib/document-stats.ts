@@ -2,6 +2,7 @@ export interface DocumentStats {
   words: number;
   characters: number;
   paragraphs: number;
+  readingTime: number;
 }
 
 function normalizeDocumentContent(content: string) {
@@ -25,5 +26,8 @@ export function getDocumentStats(content: string): DocumentStats {
           return normalizedParagraph ? [normalizedParagraph] : [];
         }).length;
 
-  return { words, characters, paragraphs };
+  const WORDS_PER_MINUTE = 238;
+  const readingTime = Math.max(1, Math.round(words / WORDS_PER_MINUTE));
+
+  return { words, characters, paragraphs, readingTime };
 }
