@@ -85,11 +85,13 @@ function DictationPicker() {
       {engine === "sherpa" ? (
         <Segmented
           ariaLabel="Dictation model"
-          value={model as "nemotron-streaming" | "parakeet-tdt-v3"}
+          value={model}
           onChange={(v) => apply("voice.stt.model", v)}
           options={[
             { value: "nemotron-streaming", label: "Nemotron" },
             { value: "parakeet-tdt-v3", label: "Parakeet" },
+            { value: "moonshine-tiny", label: "Moonshine" },
+            { value: "sense-voice", label: "SenseVoice" },
           ]}
         />
       ) : null}
