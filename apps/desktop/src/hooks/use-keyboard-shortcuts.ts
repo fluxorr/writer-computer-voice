@@ -137,6 +137,20 @@ export function useKeyboardShortcuts() {
           useVoiceSttStore.getState().start();
           return;
         }
+
+        // Escape → stop dictation gracefully when active.
+        if (e.key === "Escape" && useVoiceSttStore.getState().phase === "listening") {
+          e.preventDefault();
+          useVoiceSttStore.getState().stop();
+          return;
+        }
+
+        // Enter → commit current text and stop dictation.
+        if (e.key === "Enter" && !e.shiftKey && useVoiceSttStore.getState().phase === "listening") {
+          e.preventDefault();
+          useVoiceSttStore.getState().stop();
+          return;
+        }
       }
 
       // Cmd+T — new tab
