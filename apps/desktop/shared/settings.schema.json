@@ -346,7 +346,7 @@
     {
       "key": "voice.stt.engine",
       "label": "Dictation Engine",
-      "description": "Which speech engine transcribes dictation. sherpa runs downloadable on-device NeMo Transducer models (choose one below). apple-native uses Apple's built-in on-device speech recognition — no download, but the model choice below is ignored.",
+      "description": "Which speech engine transcribes dictation. sherpa runs downloadable on-device models (NeMo Transducer, Moonshine, SenseVoice — choose one below). apple-native uses Apple's built-in on-device speech recognition — no download, but the model choice below is ignored.",
       "category": "Voice",
       "type": "enum",
       "options": ["sherpa", "apple-native"],
@@ -355,10 +355,10 @@
     {
       "key": "voice.stt.model",
       "label": "Dictation Model",
-      "description": "On-device speech model for the sherpa engine (sherpa-onnx / NeMo Transducer), downloaded on first use and cached locally. Nemotron streams frame-by-frame (live partial text, lowest latency); Parakeet TDT is a larger, multilingual model that transcribes per utterance (commits when you pause — no live partial). Ignored when the engine is apple-native.",
+      "description": "On-device speech model for the sherpa engine (sherpa-onnx), downloaded on first use and cached locally. Nemotron streams frame-by-frame (live partial text, lowest latency). Parakeet, Moonshine, and SenseVoice transcribe per utterance (commit when you pause — no live partial). Moonshine Tiny is an extremely fast ~25MB model. SenseVoice is multilingual (Chinese, English, Japanese, Korean, Cantonese). Ignored when the engine is apple-native.",
       "category": "Voice",
       "type": "enum",
-      "options": ["nemotron-streaming", "parakeet-tdt-v3"],
+      "options": ["nemotron-streaming", "parakeet-tdt-v3", "moonshine-tiny", "sense-voice"],
       "default": "nemotron-streaming"
     },
     {
