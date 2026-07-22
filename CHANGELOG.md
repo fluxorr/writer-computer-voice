@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-07-22
+
+- Dictation models: two new offline speech-to-text models — **Moonshine Tiny** (fast quantized encoder+merged-decoder, competitive with Whisper tiny) and **SenseVoice** (multilingual, auto-detect, unified model file). Switchable from the model picker on the dictation indicator alongside the existing Nemotron/Parakeet/Apple engines.
+- Dictation keyboard shortcuts: **Escape** stops dictation (gracefully flushes final text, same as the stop button). **Enter** commits current text and stops dictation. Both only fire while the dictation phase is "listening", so they don't interfere with normal editing.
+
 ## 2026-07-17
 
 - Recent files on the launcher / new-tab page: when you open a fresh tab, the last 10 files you opened appear below the action buttons with title, parent path, and relative time. Click one to open it.
