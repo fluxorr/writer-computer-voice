@@ -75,6 +75,7 @@ import { consumePendingLineJump } from "@/lib/pending-line-jump";
 import { applyLineJump, lineJumpExtension } from "./editor-line-jump";
 import { voiceHighlightExtension } from "./voice-highlight";
 import { dictationOverlayExtension } from "./dictation-overlay";
+import { grammarLinter } from "@/lib/grammar-check";
 import { logTimeline, mark } from "@/lib/startup-metrics";
 import * as tauri from "@/lib/tauri";
 import { showAnchorWarning } from "./anchor-warning-store";
@@ -656,6 +657,10 @@ function createEditorExtensions(
     }),
 
     focusOnRevealExtension(isDisposed),
+
+    // Grammar check — never auto-runs (needsRefresh: false). Triggered on
+    // demand via forceLinting() dispatched from the "Check Grammar" button.
+    grammarLinter(),
   ];
 }
 
