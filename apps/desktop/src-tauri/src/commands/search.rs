@@ -141,7 +141,7 @@ fn fuzzy_search_from(
         })
         .collect();
 
-    results.sort_by(|a, b| b.score.cmp(&a.score));
+    results.sort_by_key(|b| std::cmp::Reverse(b.score));
     results.truncate(limit);
     Ok(results)
 }
@@ -332,7 +332,7 @@ fn search_workspace_content_impl(
 
     let mut all = Arc::try_unwrap(collected).unwrap().into_inner();
     // Higher score ranks first; relevance beats recency.
-    all.sort_by(|a, b| b.score.cmp(&a.score));
+    all.sort_by_key(|b| std::cmp::Reverse(b.score));
     all.truncate(limit_total);
     all
 }

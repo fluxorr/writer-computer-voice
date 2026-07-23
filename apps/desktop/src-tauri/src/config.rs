@@ -13,6 +13,7 @@ pub enum ConfigValue {
 }
 
 impl ConfigValue {
+    #[allow(dead_code)]
     pub fn as_str(&self) -> Option<&str> {
         match self {
             ConfigValue::String(s) => Some(s),
@@ -20,6 +21,7 @@ impl ConfigValue {
         }
     }
 
+    #[allow(dead_code)]
     pub fn as_f64(&self) -> Option<f64> {
         match self {
             ConfigValue::Number(n) => Some(*n),
@@ -329,6 +331,7 @@ impl Settings {
     }
 
     /// Clear workspace-level settings.
+    #[allow(dead_code)]
     pub fn clear_workspace(&mut self) {
         self.workspace.clear();
         self.workspace_raw.clear();
@@ -415,6 +418,7 @@ impl Settings {
     }
 
     /// Reload global config from disk.
+    #[allow(dead_code)]
     pub fn reload_global(&mut self) {
         if self.global_path.exists() {
             self.global_raw = std::fs::read_to_string(&self.global_path).unwrap_or_default();
@@ -433,11 +437,13 @@ impl Settings {
     }
 
     /// Path to the global config file.
+    #[allow(dead_code)]
     pub fn global_path(&self) -> &Path {
         &self.global_path
     }
 
     /// Path to the workspace config file, if any.
+    #[allow(dead_code)]
     pub fn workspace_path(&self) -> Option<&Path> {
         self.workspace_path.as_deref()
     }
