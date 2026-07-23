@@ -27,6 +27,8 @@ import { prosemarkMarkdownFormattingKeymap } from "./markdownFormattingKeymap";
 export { prosemarkMarkdownSyntaxExtensions } from "./markdown";
 
 export const prosemarkBasicSetup = (): Extension => [
+  EditorView.contentAttributes.of({ spellcheck: "true" }),
+
   // ProseMark Setup
   defaultHideExtensions,
   defaultFoldableSyntaxExtensions,
