@@ -225,6 +225,7 @@ fn index_workspace_test(root: &Path) -> (Vec<IndexedFile>, HashSet<PathBuf>) {
     index_workspace_impl(root, Arc::new(AtomicBool::new(false)))
 }
 
+#[cfg(test)]
 pub fn fuzzy_search_impl(query: &str, index: &[IndexedFile], limit: usize) -> Vec<SearchResult> {
     fuzzy_search_from(query, index, limit).unwrap_or_default()
 }
