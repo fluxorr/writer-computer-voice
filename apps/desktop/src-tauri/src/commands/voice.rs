@@ -114,16 +114,37 @@ fn discover_moonshine_files(dir: &std::path::Path) -> Option<(PathBuf, PathBuf, 
     let mut enc = None;
     let mut dec = None;
     let mut tok = None;
-    fn walk(d: &std::path::Path, enc: &mut Option<PathBuf>, dec: &mut Option<PathBuf>, tok: &mut Option<PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(d) else { return };
+    fn walk(
+        d: &std::path::Path,
+        enc: &mut Option<PathBuf>,
+        dec: &mut Option<PathBuf>,
+        tok: &mut Option<PathBuf>,
+    ) {
+        let Ok(entries) = std::fs::read_dir(d) else {
+            return;
+        };
         for entry in entries.flatten() {
             let p = entry.path();
-            if p.is_dir() { walk(&p, enc, dec, tok); continue; }
-            let Some(name) = p.file_name().and_then(|n| n.to_str()) else { continue };
+            if p.is_dir() {
+                walk(&p, enc, dec, tok);
+                continue;
+            }
+            let Some(name) = p.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
             let lower = name.to_ascii_lowercase();
-            if lower == "tokens.txt" { *tok = Some(p.clone()); }
-            else if lower.contains("encoder") && (lower.ends_with(".onnx") || lower.ends_with(".ort")) { *enc = Some(p.clone()); }
-            else if lower.contains("decoder") && lower.contains("merged") && (lower.ends_with(".onnx") || lower.ends_with(".ort")) { *dec = Some(p.clone()); }
+            if lower == "tokens.txt" {
+                *tok = Some(p.clone());
+            } else if lower.contains("encoder")
+                && (lower.ends_with(".onnx") || lower.ends_with(".ort"))
+            {
+                *enc = Some(p.clone());
+            } else if lower.contains("decoder")
+                && lower.contains("merged")
+                && (lower.ends_with(".onnx") || lower.ends_with(".ort"))
+            {
+                *dec = Some(p.clone());
+            }
         }
     }
     walk(dir, &mut enc, &mut dec, &mut tok);
@@ -133,14 +154,23 @@ fn discover_moonshine_files(dir: &std::path::Path) -> Option<(PathBuf, PathBuf, 
 fn discover_sense_voice_files(dir: &std::path::Path) -> Option<(PathBuf, PathBuf)> {
     let mut model = None;
     let mut tok = None;
-    let Ok(entries) = std::fs::read_dir(dir) else { return None };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return None;
+    };
     for entry in entries.flatten() {
         let p = entry.path();
-        if p.is_dir() { continue; }
-        let Some(name) = p.file_name().and_then(|n| n.to_str()) else { continue };
+        if p.is_dir() {
+            continue;
+        }
+        let Some(name) = p.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
         let lower = name.to_ascii_lowercase();
-        if lower == "tokens.txt" { tok = Some(p.clone()); }
-        else if lower.contains("model.int8.onnx") || lower == "model.int8.onnx" { model = Some(p.clone()); }
+        if lower == "tokens.txt" {
+            tok = Some(p.clone());
+        } else if lower.contains("model.int8.onnx") || lower == "model.int8.onnx" {
+            model = Some(p.clone());
+        }
     }
     Some((model?, tok?))
 }
@@ -841,7 +871,10 @@ fn run_offline_worker(
     config.model_config.tokens = Some(files.3.to_string_lossy().into_owned());
     config.model_config.model_type = Some("nemo_transducer".into());
     config.model_config.provider = Some("cpu".into());
-    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(1, 8);
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .clamp(1, 8);
     config.model_config.num_threads = threads as i32;
     config.decoding_method = Some("greedy_search".into());
     config.feat_config.sample_rate = 16_000;
@@ -849,7 +882,10 @@ fn run_offline_worker(
     let recognizer = match OfflineRecognizer::create(&config) {
         Some(r) => r,
         None => {
-            let _ = window.emit("voice-stt-status", json!({ "status": "error", "message": "failed to load speech model" }));
+            let _ = window.emit(
+                "voice-stt-status",
+                json!({ "status": "error", "message": "failed to load speech model" }),
+            );
             return;
         }
     };
@@ -872,7 +908,10 @@ fn run_moonshine_worker(
     config.model_config.tokens = Some(files.2.to_string_lossy().into_owned());
     config.model_config.model_type = Some("moonshine".into());
     config.model_config.provider = Some("cpu".into());
-    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(1, 8);
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .clamp(1, 8);
     config.model_config.num_threads = threads as i32;
     config.decoding_method = Some("greedy_search".into());
     config.feat_config.sample_rate = 16_000;
@@ -880,7 +919,10 @@ fn run_moonshine_worker(
     let recognizer = match OfflineRecognizer::create(&config) {
         Some(r) => r,
         None => {
-            let _ = window.emit("voice-stt-status", json!({ "status": "error", "message": "failed to load speech model" }));
+            let _ = window.emit(
+                "voice-stt-status",
+                json!({ "status": "error", "message": "failed to load speech model" }),
+            );
             return;
         }
     };
@@ -904,7 +946,10 @@ fn run_sense_voice_worker(
     config.model_config.tokens = Some(files.1.to_string_lossy().into_owned());
     config.model_config.model_type = Some("sense_voice".into());
     config.model_config.provider = Some("cpu".into());
-    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(1, 8);
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .clamp(1, 8);
     config.model_config.num_threads = threads as i32;
     config.decoding_method = Some("greedy_search".into());
     config.feat_config.sample_rate = 16_000;
@@ -912,7 +957,10 @@ fn run_sense_voice_worker(
     let recognizer = match OfflineRecognizer::create(&config) {
         Some(r) => r,
         None => {
-            let _ = window.emit("voice-stt-status", json!({ "status": "error", "message": "failed to load speech model" }));
+            let _ = window.emit(
+                "voice-stt-status",
+                json!({ "status": "error", "message": "failed to load speech model" }),
+            );
             return;
         }
     };
@@ -960,16 +1008,18 @@ pub fn voice_stt_start(
     // Validate model files exist (per-kind tuple type doesn't mix, so check
     // early but only capture the nemo tuple for streaming/offline workers).
     match def.kind {
-        ModelKind::Streaming | ModelKind::OfflineTransducer =>
-            { discover_model_files(&dir).ok_or("model-not-ready".to_string())?; }
-        ModelKind::MoonshineV2 =>
-            { discover_moonshine_files(&dir).ok_or("model-not-ready".to_string())?; }
-        ModelKind::SenseVoice =>
-            { discover_sense_voice_files(&dir).ok_or("model-not-ready".to_string())?; }
+        ModelKind::Streaming | ModelKind::OfflineTransducer => {
+            discover_model_files(&dir).ok_or("model-not-ready".to_string())?;
+        }
+        ModelKind::MoonshineV2 => {
+            discover_moonshine_files(&dir).ok_or("model-not-ready".to_string())?;
+        }
+        ModelKind::SenseVoice => {
+            discover_sense_voice_files(&dir).ok_or("model-not-ready".to_string())?;
+        }
     }
     let nemo_files = match def.kind {
-        ModelKind::Streaming | ModelKind::OfflineTransducer =>
-            discover_model_files(&dir),
+        ModelKind::Streaming | ModelKind::OfflineTransducer => discover_model_files(&dir),
         _ => None,
     };
 
@@ -1039,20 +1089,58 @@ pub fn voice_stt_start(
     let worker_window = window.clone();
     let kind = def.kind;
     // Pre-compute per-kind file tuples before the move closure.
-    let moonshine_files = if kind == ModelKind::MoonshineV2 { discover_moonshine_files(&dir) } else { None };
-    let sense_voice_files = if kind == ModelKind::SenseVoice { discover_sense_voice_files(&dir) } else { None };
-    guard.worker = Some(thread::spawn(move || {
-        match kind {
-            ModelKind::Streaming => run_streaming_worker(rt_for_worker, worker_window, raw, cancel, nemo_files.expect("files verified"), resampler, my_epoch),
-            ModelKind::OfflineTransducer => run_offline_worker(rt_for_worker, worker_window, raw, cancel, nemo_files.expect("files verified"), resampler, my_epoch),
-            ModelKind::MoonshineV2 => {
-                let mf = moonshine_files.expect("moonshine files verified at start");
-                run_moonshine_worker(rt_for_worker, worker_window, raw, cancel, mf, resampler, my_epoch);
-            }
-            ModelKind::SenseVoice => {
-                let svf = sense_voice_files.expect("sense-voice files verified at start");
-                run_sense_voice_worker(rt_for_worker, worker_window, raw, cancel, svf, resampler, my_epoch);
-            }
+    let moonshine_files = if kind == ModelKind::MoonshineV2 {
+        discover_moonshine_files(&dir)
+    } else {
+        None
+    };
+    let sense_voice_files = if kind == ModelKind::SenseVoice {
+        discover_sense_voice_files(&dir)
+    } else {
+        None
+    };
+    guard.worker = Some(thread::spawn(move || match kind {
+        ModelKind::Streaming => run_streaming_worker(
+            rt_for_worker,
+            worker_window,
+            raw,
+            cancel,
+            nemo_files.expect("files verified"),
+            resampler,
+            my_epoch,
+        ),
+        ModelKind::OfflineTransducer => run_offline_worker(
+            rt_for_worker,
+            worker_window,
+            raw,
+            cancel,
+            nemo_files.expect("files verified"),
+            resampler,
+            my_epoch,
+        ),
+        ModelKind::MoonshineV2 => {
+            let mf = moonshine_files.expect("moonshine files verified at start");
+            run_moonshine_worker(
+                rt_for_worker,
+                worker_window,
+                raw,
+                cancel,
+                mf,
+                resampler,
+                my_epoch,
+            );
+        }
+        ModelKind::SenseVoice => {
+            let svf = sense_voice_files.expect("sense-voice files verified at start");
+            run_sense_voice_worker(
+                rt_for_worker,
+                worker_window,
+                raw,
+                cancel,
+                svf,
+                resampler,
+                my_epoch,
+            );
         }
     }));
 
