@@ -55,7 +55,7 @@ const RESAMPLER_CHUNK: usize = 8_192;
 const WORKER_TICK: Duration = Duration::from_millis(60);
 const PROGRESS_STEP: u64 = 256 * 1024;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum ModelKind {
     Streaming,
     OfflineTransducer,
@@ -1102,4 +1102,114 @@ pub fn voice_stt_stop(window: WebviewWindow) -> Result<(), String> {
 #[tauri::command]
 pub fn voice_stt_stop(_window: WebviewWindow) -> Result<(), String> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_def_returns_known_streaming() {
+        let def = model_def("nemotron-streaming").unwrap();
+        assert_eq!(def.kind, ModelKind::Streaming);
+        assert!(def.archive.contains("nemotron"));
+        assert!(def.url.starts_with("https://github.com/k2-fsa/"));
+    }
+
+    #[test]
+    fn model_def_returns_known_offline_transducer() {
+        let def = model_def("parakeet-tdt-v3").unwrap();
+        assert_eq!(def.kind, ModelKind::OfflineTransducer);
+    }
+
+    #[test]
+    fn model_def_returns_known_moonshine() {
+        let def = model_def("moonshine-tiny").unwrap();
+        assert_eq!(def.kind, ModelKind::MoonshineV2);
+    }
+
+    #[test]
+    fn model_def_returns_known_sense_voice() {
+        let def = model_def("sense-voice").unwrap();
+        assert_eq!(def.kind, ModelKind::SenseVoice);
+    }
+
+    #[test]
+    fn model_def_returns_none_for_unknown() {
+        assert!(model_def("nonexistent-model").is_none());
+    }
+
+    #[test]
+    fn model_kind_equality() {
+        assert_eq!(ModelKind::Streaming, ModelKind::Streaming);
+        assert_ne!(ModelKind::Streaming, ModelKind::OfflineTransducer);
+        assert_ne!(ModelKind::MoonshineV2, ModelKind::SenseVoice);
+    }
+
+    #[test]
+    fn discover_moonshine_files_finds_encoder_decoder_tokens() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("encoder.onnx"), b"").unwrap();
+        std::fs::write(dir.path().join("decoder_merged.onnx"), b"").unwrap();
+        std::fs::write(dir.path().join("tokens.txt"), b"").unwrap();
+
+        let result = discover_moonshine_files(dir.path());
+        assert!(result.is_some());
+        let (enc, dec, tok) = result.unwrap();
+        assert!(enc.to_string_lossy().contains("encoder"));
+        assert!(dec.to_string_lossy().contains("merged"));
+        assert!(tok.to_string_lossy().contains("tokens"));
+    }
+
+    #[test]
+    fn discover_moonshine_files_returns_none_when_missing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("unrelated.txt"), b"").unwrap();
+        assert!(discover_moonshine_files(dir.path()).is_none());
+    }
+
+    #[test]
+    fn discover_sense_voice_files_finds_model_and_tokens() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("model.int8.onnx"), b"").unwrap();
+        std::fs::write(dir.path().join("tokens.txt"), b"").unwrap();
+
+        let result = discover_sense_voice_files(dir.path());
+        assert!(result.is_some());
+        let (model, tok) = result.unwrap();
+        assert!(model.to_string_lossy().contains("model.int8.onnx"));
+        assert!(tok.to_string_lossy().contains("tokens"));
+    }
+
+    #[test]
+    fn discover_sense_voice_files_returns_none_when_missing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        assert!(discover_sense_voice_files(dir.path()).is_none());
+    }
+
+    #[test]
+    fn discover_sense_voice_files_returns_none_for_empty_dir() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir(dir.path().join("subdir")).unwrap();
+        assert!(discover_sense_voice_files(dir.path()).is_none());
+    }
+
+    #[test]
+    fn all_models_have_unique_ids() {
+        let mut seen = std::collections::HashSet::new();
+        for (id, _) in MODELS {
+            assert!(seen.insert(id), "duplicate model id: {id}");
+        }
+    }
+
+    #[test]
+    fn all_model_urls_are_https_github() {
+        for (id, def) in MODELS {
+            assert!(
+                def.url.starts_with("https://github.com/"),
+                "model {id} URL is not an HTTPS GitHub URL: {}",
+                def.url
+            );
+        }
+    }
 }
